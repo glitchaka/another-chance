@@ -19,17 +19,20 @@ Ejecutable: `build/Release/AnotherChance.exe`.
 
 ## Arquitectura
 
-- `src/tech/`: adaptación real de contenedores **idTech** (cola intrusiva).
+- `src/tech/`: adaptación real de contenedores **idTech** (cola y pila intrusivas, usadas en el planificador de descargas y en el parser HTML).
 - `src/net/`: acceso HTTP/HTTPS vía WinHTTP nativo de Windows (TLS mediante Schannel; no hay motor web externo).
 - `src/html/`: parser HTML y árbol de nodos propios.
 - `src/style/`: parser y aplicación de un subconjunto CSS.
-- `src/layout/`: composición de texto y regiones clicables.
+- `src/layout/`: composición de texto, imágenes y regiones clicables.
+- `src/image/`: decodificación PNG/JPEG/GIF mediante WIC nativo de Windows.
 - `src/window/`: ventana, barra de navegación, historial, desplazamiento y rasterizado por GDI.
 - `src/util/`: Unicode y resolución de URL.
 
 ## Estado funcional inicial
 
-Direcciones HTTP/HTTPS, búsqueda desde la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, un subconjunto de CSS en línea e interno, y renderizado de texto y separadores. No interpreta JavaScript ni promete renderizar correctamente todos los sitios modernos.
+Direcciones HTTP/HTTPS, búsqueda desde la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. No interpreta JavaScript, no admite formularios interactivos y no promete renderizar correctamente todos los sitios modernos.
+
+La compilación x64 se verifica con el workflow de GitHub Actions `Windows C++ build`. Que compile no equivale a garantizar que todos los sitios se visualicen correctamente.
 
 ## Licencias
 

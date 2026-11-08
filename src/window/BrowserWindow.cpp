@@ -16,6 +16,19 @@ void SetControlFont(HWND handle) {
                  reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
 }
 
+void CollectStyleSheets(const ac::html::Node& node, const std::wstring& base,
+                        std::vector<std::wstring>& urls,
+                        std::unordered_set<std::wstring>& known) {
+    if (urls.size() >= 4) return;
+    if (node.tag == "link" && node.Attribute("rel").find("stylesheet") != std::string::npos) {
+        const auto url = ac::url::Resolve(base, ac::url::ToWide(node.Attribute("href")));
+        if (ac::url::IsWeb(url) && known.insert(url).second) urls.push_back(url);
+    }
+    for (const auto& child : node.children) {
+        CollectStyleSheets(*child, base, urls, known);
+    }
+}
+
 void CollectImages(const ac::html::Node& node, const std::wstring& base,
                    std::vector<std::wstring>& urls,
                    std::unordered_set<std::wstring>& known) {
@@ -171,6 +184,9 @@ void BrowserWindow::StopWorker() {
         while (PeekMessageW(&message, hwnd_, kImageReady, kImageReady, PM_REMOVE)) {
             delete reinterpret_cast<LoadedImage*>(message.lParam);
         }
+        while (PeekMessageW(&message, hwnd_, kStyleReady, kStyleReady, PM_REMOVE)) {
+            delete reinterpret_cast<LoadedStyle*>(message.lParam);
+        }
     }
 }
 
@@ -209,16 +225,39 @@ void BrowserWindow::WorkerLoop() {
                 "</p><p>Comprueba la dirección y la conexión.</p></body></html>");
         }
         std::vector<std::wstring> imageUrls;
+        std::vector<std::wstring> cssUrls;
         std::unordered_set<std::wstring> knownImages;
+        std::unordered_set<std::wstring> knownCss;
         if (result->document.root) {
             CollectImages(*result->document.root, result->response.url,
                           imageUrls, knownImages);
+            CollectStyleSheets(*result->document.root, result->response.url,
+                               cssUrls, knownCss);
         }
         if (!PostMessageW(hwnd_, kPageReady, 0,
                           reinterpret_cast<LPARAM>(result.get()))) {
             // Window has been destroyed; unique_ptr frees it.
         } else {
             result.release();
+        }
+
+        // External CSS is fetched after the initial page; it never executes scripts.
+        for (const auto& cssUrl : cssUrls) {
+            if (job->generation != newestRequest_.load()) break;
+            {
+                std::lock_guard guard(taskMutex_);
+                if (stopping_) break;
+            }
+            auto cssResponse = http.Get(cssUrl, 512 * 1024);
+            if (!cssResponse.Ok() || cssResponse.status >= 400 ||
+                cssResponse.body.empty()) continue;
+            auto loadedCss = std::make_unique<LoadedStyle>();
+            loadedCss->generation = job->generation;
+            loadedCss->css = std::move(cssResponse.body);
+            if (PostMessageW(hwnd_, kStyleReady, 0,
+                             reinterpret_cast<LPARAM>(loadedCss.get()))) {
+                loadedCss.release();
+            }
         }
 
         // Images arrive progressively, after text, without blocking first paint.
@@ -368,6 +407,17 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+void BrowserWindow::OnStyleReady(LoadedStyle* raw) {
+    std::unique_ptr<LoadedStyle> style(raw);
+    if (!style || style->generation != generation_ || !document_) return;
+    if (document_->embeddedCss.size() + style->css.size() > 2 * 1024 * 1024) return;
+    document_->embeddedCss.append("\n");
+    document_->embeddedCss.append(style->css);
+    sheet_.Parse(document_->embeddedCss);
+    Reflow();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void BrowserWindow::OnImageReady(LoadedImage* raw) {
     std::unique_ptr<LoadedImage> image(raw);
     if (!image || image->generation != generation_) return;
@@ -429,6 +479,9 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return 0;
         case kImageReady:
             OnImageReady(reinterpret_cast<LoadedImage*>(lparam));
+            return 0;
+        case kStyleReady:
+            OnStyleReady(reinterpret_cast<LoadedStyle*>(lparam));
             return 0;
         case WM_COMMAND:
             switch (LOWORD(wparam)) {

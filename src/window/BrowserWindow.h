@@ -29,6 +29,7 @@ public:
 private:
     static constexpr UINT kPageReady = WM_APP + 7;
     static constexpr UINT kImageReady = WM_APP + 8;
+    static constexpr UINT kStyleReady = WM_APP + 9;
     static constexpr int kToolbarHeight = 59;
     static constexpr int kStatusHeight = 26;
 
@@ -49,6 +50,10 @@ private:
         unsigned generation = 0;
         std::wstring url;
         std::string bytes;
+    };
+    struct LoadedStyle {
+        unsigned generation = 0;
+        std::string css;
     };
 
     HWND hwnd_ = nullptr;
@@ -105,6 +110,7 @@ private:
     void StopWorker();
     void OnPageReady(LoadedPage* result);
     void OnImageReady(LoadedImage* image);
+    void OnStyleReady(LoadedStyle* style);
     [[nodiscard]] std::wstring AddressText() const;
     [[nodiscard]] int MaxScroll() const;
     [[nodiscard]] RECT ContentRect() const;

@@ -1,4 +1,5 @@
 #include "html/HtmlParser.h"
+#include "tech/IdStack.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -95,7 +96,20 @@ Document Parse(std::string_view input) {
     document.root->tag = "document";
 
     const std::string lower = Lower(input);
-    std::vector<Node*> stack{document.root.get()};
+    struct OpenElement {
+        idStackNode<OpenElement> link;
+        Node* node = nullptr;
+        explicit OpenElement(Node* element) : node(element) {}
+    };
+    idStack<OpenElement, &OpenElement::link> open;
+    std::vector<std::unique_ptr<OpenElement>> storage;
+    auto push = [&](Node* element) {
+        storage.push_back(std::make_unique<OpenElement>(element));
+        open.Add(storage.back().get());
+    };
+    push(document.root.get());
+    auto current = [&]() -> Node* { return open.Peek()->node; };
+
     size_t i = 0;
     while (i < input.size()) {
         if (input[i] != '<') {
@@ -105,8 +119,8 @@ Document Parse(std::string_view input) {
                 auto node = std::make_unique<Node>();
                 node->type = Node::Type::Text;
                 node->text = DecodeEntities(input.substr(i, length));
-                node->parent = stack.back();
-                stack.back()->children.push_back(std::move(node));
+                node->parent = current();
+                current()->children.push_back(std::move(node));
             }
             i += length;
             continue;
@@ -129,11 +143,15 @@ Document Parse(std::string_view input) {
             const std::string closeTag = Lower(input.substr(nameStart, p - nameStart));
             const auto end = input.find('>', p);
             i = end == std::string_view::npos ? input.size() : end + 1;
-            for (size_t j = stack.size(); j > 1; --j) {
-                if (stack[j - 1]->tag == closeTag) {
-                    stack.resize(j - 1);
-                    break;
-                }
+            OpenElement* match = open.Peek();
+            while (match && match->node != document.root.get() &&
+                   match->node->tag != closeTag) {
+                match = match->link.GetNext();
+            }
+            if (match && match->node != document.root.get() &&
+                match->node->tag == closeTag) {
+                while (open.Peek() != match) open.Get();
+                open.Get();
             }
             continue;
         }
@@ -147,8 +165,8 @@ Document Parse(std::string_view input) {
             auto node = std::make_unique<Node>();
             node->type = Node::Type::Text;
             node->text = "<";
-            node->parent = stack.back();
-            stack.back()->children.push_back(std::move(node));
+            node->parent = current();
+            current()->children.push_back(std::move(node));
             ++i;
             continue;
         }
@@ -187,8 +205,8 @@ Document Parse(std::string_view input) {
         }
         i = p < input.size() ? p + 1 : input.size();
         Node* element = node.get();
-        element->parent = stack.back();
-        stack.back()->children.push_back(std::move(node));
+        element->parent = current();
+        current()->children.push_back(std::move(node));
 
         if (element->tag == "script" || element->tag == "style") {
             const std::string closing = "</" + element->tag;
@@ -204,7 +222,7 @@ Document Parse(std::string_view input) {
             continue;
         }
         if (!selfClosing && !IsVoid(element->tag)) {
-            stack.push_back(element);
+            push(element);
         }
     }
     CollectTitle(*document.root, document.title);
