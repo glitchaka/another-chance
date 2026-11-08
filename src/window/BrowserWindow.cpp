@@ -270,7 +270,7 @@ RECT BrowserWindow::ContentRect() const {
 }
 int BrowserWindow::MaxScroll() const {
     const RECT content = ContentRect();
-    return std::max(0, layout_.Height() - (content.bottom - content.top));
+    return std::max(0, layout_.Height() - static_cast<int>(content.bottom - content.top));
 }
 
 void BrowserWindow::Resize(int width, int height) {

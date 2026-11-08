@@ -80,10 +80,10 @@ void PageLayout::AppendWord(HDC dc, std::wstring_view word,
         item.bold = style.bold;
         item.italic = style.italic;
         item.underline = style.underline;
-        item.rect = {x_, y_, x_ + extent.cx, y_ + std::max(extent.cy, style.fontSize + 2)};
+        item.rect = {x_, y_, x_ + extent.cx, y_ + std::max(static_cast<int>(extent.cy), style.fontSize + 2)};
         items_.push_back(std::move(item));
         x_ += extent.cx;
-        lineHeight_ = std::max(lineHeight_, std::max(extent.cy + 4, style.fontSize + 7));
+        lineHeight_ = std::max(lineHeight_, std::max(static_cast<int>(extent.cy) + 4, style.fontSize + 7));
         remaining.erase(0, chars);
         if (!remaining.empty()) NewLine();
     }
