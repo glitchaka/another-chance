@@ -22,11 +22,11 @@ struct Computed {
 
 class Sheet {
 public:
+    using Declaration = std::pair<std::string, std::string>;
     void Parse(std::string_view css);
     [[nodiscard]] Computed Compute(const html::Node& node,
                                    const Computed& parent) const;
 private:
-    using Declaration = std::pair<std::string, std::string>;
     struct Rule {
         std::string selector;
         std::vector<Declaration> declarations;
