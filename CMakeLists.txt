@@ -23,3 +23,21 @@ target_link_libraries(AnotherChance PRIVATE winhttp shlwapi comctl32 gdi32 user3
 if(MSVC)
     target_compile_options(AnotherChance PRIVATE /W4 /permissive- /utf-8 /EHsc)
 endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(AnotherChanceTests
+        tests/EngineTests.cpp
+        src/html/HtmlParser.cpp
+        src/style/Style.cpp
+        src/util/Url.cpp
+    )
+    target_compile_features(AnotherChanceTests PRIVATE cxx_std_20)
+    target_compile_definitions(AnotherChanceTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_include_directories(AnotherChanceTests PRIVATE src)
+    target_link_libraries(AnotherChanceTests PRIVATE shlwapi gdi32 user32)
+    if(MSVC)
+        target_compile_options(AnotherChanceTests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+    endif()
+    add_test(NAME CoreHtmlCssUrl COMMAND AnotherChanceTests)
+endif()
