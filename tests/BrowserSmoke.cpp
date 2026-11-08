@@ -192,7 +192,17 @@ private:
         while (GetTickCount64() - start < 15000) {
             if (!IsAlive()) return nullptr;
             HWND found = FindWindowW(L"AnotherChance.NativeBrowser", nullptr);
-            if (found) return found;
+            if (found && IsWindowVisible(found)) {
+                wchar_t title[512]{};
+                GetWindowTextW(found, title, 512);
+                HWND field = FindWindowExW(found, nullptr, L"Edit", nullptr);
+                HWND status = FindWindowExW(found, nullptr, L"Static", nullptr);
+                wchar_t statusText[512]{};
+                if (status) GetWindowTextW(status, statusText, 512);
+                if (field && title[0] != L'\0' &&
+                    std::wstring_view(statusText).find(L"Listo para navegar") !=
+                    std::wstring_view::npos) return found;
+            }
             Sleep(100);
         }
         return nullptr;
@@ -221,6 +231,7 @@ int wmain(int argc, wchar_t** argv) {
         Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
+        std::cout << "DIAG: browser startup reached ready state\n";
         browser.Navigate(page);
         const bool loaded = Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 30000);
