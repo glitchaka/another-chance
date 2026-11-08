@@ -1,9 +1,11 @@
 #include "window/BrowserWindow.h"
 #include <windows.h>
 #include <commctrl.h>
+#include <objbase.h>
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     SetProcessDPIAware();
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     INITCOMMONCONTROLSEX controls{};
     controls.dwSize = sizeof(controls);
     controls.dwICC = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
@@ -13,6 +15,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (!window) {
         MessageBoxW(nullptr, L"No se pudo crear la ventana de Another Chance.",
                     L"Another Chance", MB_ICONERROR | MB_OK);
+        if (SUCCEEDED(com)) CoUninitialize();
         return 1;
     }
 
@@ -34,5 +37,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         }
     }
     if (accelerators) DestroyAcceleratorTable(accelerators);
+    if (SUCCEEDED(com)) CoUninitialize();
     return static_cast<int>(message.wParam);
 }

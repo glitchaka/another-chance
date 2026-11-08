@@ -2,6 +2,8 @@
 #include "util/Url.h"
 #include <algorithm>
 #include <cwctype>
+#include <cstdlib>
+#include <cmath>
 
 namespace ac::layout {
 namespace {
@@ -148,8 +150,34 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
     }
     if (tag == "img") {
         const auto alt = node.Attribute("alt");
-        AppendText(dc, alt.empty() ? L"[Imagen]" :
-            L"[Imagen: " + ac::url::ToWide(alt) + L"]", computed, link);
+        const auto source = ac::url::Resolve(pageUrl_,
+            ac::url::ToWide(node.Attribute("src")));
+        const auto* bitmap = images_ ? images_->Find(source) : nullptr;
+        if (!bitmap) {
+            AppendText(dc, alt.empty() ? L"[Imagen]" :
+                L"[Imagen: " + ac::url::ToWide(alt) + L"]", computed, link);
+            return;
+        }
+        if (x_ > left_ + listDepth_ * 22) NewLine();
+        const int available = std::max(80, right_ - left_ - listDepth_ * 22);
+        int desiredWidth = bitmap->width;
+        const auto widthAttr = node.Attribute("width");
+        if (!widthAttr.empty()) {
+            const long proposed = std::strtol(widthAttr.c_str(), nullptr, 10);
+            if (proposed > 0) desiredWidth = static_cast<int>(std::min(proposed, 4096L));
+        }
+        const int imageWidth = std::min(available, desiredWidth);
+        const int imageHeight = std::max(1, static_cast<int>(
+            std::round(static_cast<double>(bitmap->height) * imageWidth / bitmap->width)));
+        Item image;
+        image.kind = Item::Kind::Image;
+        image.imageUrl = source;
+        image.link = link;
+        image.rect = {x_, y_, x_ + imageWidth, y_ + imageHeight};
+        items_.push_back(std::move(image));
+        y_ += imageHeight + 12;
+        x_ = left_ + listDepth_ * 22;
+        lineHeight_ = 24;
         return;
     }
     if (tag == "input" || tag == "button" || tag == "textarea") {
@@ -174,10 +202,11 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
 }
 
 void PageLayout::Reflow(HDC dc, const html::Document& document,
-                        const style::Sheet& sheet, const std::wstring& pageUrl,
-                        int viewportWidth) {
+                        const style::Sheet& sheet, const image::Store& images,
+                        const std::wstring& pageUrl, int viewportWidth) {
     items_.clear();
     sheet_ = &sheet;
+    images_ = &images;
     pageUrl_ = pageUrl;
     left_ = 22;
     right_ = std::max(left_ + 80, viewportWidth - 24);
@@ -198,7 +227,20 @@ void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
         const int y = item.rect.top + top - scroll;
         const int bottom = item.rect.bottom + top - scroll;
         if (bottom < viewport.top || y > viewport.bottom) continue;
-        if (item.kind == Item::Kind::Rule) {
+        if (item.kind == Item::Kind::Image) {
+            const auto* bitmap = images_ ? images_->Find(item.imageUrl) : nullptr;
+            if (!bitmap) continue;
+            HDC memory = CreateCompatibleDC(dc);
+            if (!memory) continue;
+            HGDIOBJ old = SelectObject(memory, bitmap->handle);
+            BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+            AlphaBlend(dc, item.rect.left, y,
+                item.rect.right - item.rect.left,
+                item.rect.bottom - item.rect.top,
+                memory, 0, 0, bitmap->width, bitmap->height, blend);
+            SelectObject(memory, old);
+            DeleteDC(memory);
+        } else if (item.kind == Item::Kind::Rule) {
             HPEN pen = CreatePen(PS_SOLID, 1, item.color);
             HGDIOBJ prior = SelectObject(dc, pen);
             MoveToEx(dc, item.rect.left, y, nullptr);

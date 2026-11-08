@@ -1,6 +1,7 @@
 #pragma once
 #include "html/HtmlParser.h"
 #include "style/Style.h"
+#include "image/ImageStore.h"
 #include <windows.h>
 #include <map>
 #include <string>
@@ -17,7 +18,8 @@ public:
     PageLayout& operator=(const PageLayout&) = delete;
 
     void Reflow(HDC dc, const html::Document& document,
-                const style::Sheet& sheet, const std::wstring& pageUrl,
+                const style::Sheet& sheet, const image::Store& images,
+                const std::wstring& pageUrl,
                 int viewportWidth);
     void Draw(HDC dc, int top, int scroll, const RECT& viewport);
     [[nodiscard]] std::wstring LinkAt(int x, int y, int top, int scroll) const;
@@ -25,11 +27,12 @@ public:
 
 private:
     struct Item {
-        enum class Kind { Text, Rule };
+        enum class Kind { Text, Rule, Image };
         Kind kind = Kind::Text;
         RECT rect{};
         std::wstring text;
         std::wstring link;
+        std::wstring imageUrl;
         COLORREF color = RGB(40,40,40);
         int fontSize = 16;
         bool bold = false;
@@ -39,6 +42,7 @@ private:
     std::vector<Item> items_;
     std::map<std::tuple<int,bool,bool,bool>, HFONT> fonts_;
     const style::Sheet* sheet_ = nullptr;
+    const image::Store* images_ = nullptr;
     std::wstring pageUrl_;
     int left_ = 22;
     int right_ = 600;

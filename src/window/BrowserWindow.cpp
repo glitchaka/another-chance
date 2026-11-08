@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <unordered_set>
 
 namespace ac {
 namespace {
@@ -13,6 +14,19 @@ constexpr wchar_t kClassName[] = L"AnotherChance.NativeBrowser";
 void SetControlFont(HWND handle) {
     SendMessageW(handle, WM_SETFONT,
                  reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+}
+
+void CollectImages(const ac::html::Node& node, const std::wstring& base,
+                   std::vector<std::wstring>& urls,
+                   std::unordered_set<std::wstring>& known) {
+    if (urls.size() >= 12) return;
+    if (node.tag == "img") {
+        const auto url = ac::url::Resolve(base, ac::url::ToWide(node.Attribute("src")));
+        if (ac::url::IsWeb(url) && known.insert(url).second) urls.push_back(url);
+    }
+    for (const auto& child : node.children) {
+        CollectImages(*child, base, urls, known);
+    }
 }
 
 std::string EscapeHtml(const std::string& input) {
@@ -154,6 +168,9 @@ void BrowserWindow::StopWorker() {
         while (PeekMessageW(&message, hwnd_, kPageReady, kPageReady, PM_REMOVE)) {
             delete reinterpret_cast<LoadedPage*>(message.lParam);
         }
+        while (PeekMessageW(&message, hwnd_, kImageReady, kImageReady, PM_REMOVE)) {
+            delete reinterpret_cast<LoadedImage*>(message.lParam);
+        }
     }
 }
 
@@ -191,11 +208,36 @@ void BrowserWindow::WorkerLoop() {
                 EscapeHtml(url::ToUtf8(result->response.error)) +
                 "</p><p>Comprueba la dirección y la conexión.</p></body></html>");
         }
+        std::vector<std::wstring> imageUrls;
+        std::unordered_set<std::wstring> knownImages;
+        if (result->document.root) {
+            CollectImages(*result->document.root, result->response.url,
+                          imageUrls, knownImages);
+        }
         if (!PostMessageW(hwnd_, kPageReady, 0,
                           reinterpret_cast<LPARAM>(result.get()))) {
             // Window has been destroyed; unique_ptr frees it.
         } else {
             result.release();
+        }
+
+        // Images arrive progressively, after text, without blocking first paint.
+        for (const auto& imageUrl : imageUrls) {
+            if (job->generation != newestRequest_.load()) break;
+            {
+                std::lock_guard guard(taskMutex_);
+                if (stopping_) break;
+            }
+            auto picture = http.Get(imageUrl, 4 * 1024 * 1024);
+            if (!picture.Ok() || picture.status >= 400 || picture.body.empty()) continue;
+            auto imageResult = std::make_unique<LoadedImage>();
+            imageResult->generation = job->generation;
+            imageResult->url = imageUrl;
+            imageResult->bytes = std::move(picture.body);
+            if (PostMessageW(hwnd_, kImageReady, 0,
+                             reinterpret_cast<LPARAM>(imageResult.get()))) {
+                imageResult.release();
+            }
         }
     }
 }
@@ -226,6 +268,7 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
     isLoading_ = true;
     SetStatus(L"Cargando " + address + L"...");
     const unsigned id = ++generation_;
+    newestRequest_.store(id);
     {
         std::lock_guard guard(taskMutex_);
         if (stopping_) return;
@@ -293,7 +336,7 @@ void BrowserWindow::Reflow() {
     if (!document_ || !hwnd_) return;
     HDC dc = GetDC(hwnd_);
     if (!dc) return;
-    layout_.Reflow(dc, *document_, sheet_, currentUrl_, clientWidth_);
+    layout_.Reflow(dc, *document_, sheet_, images_, currentUrl_, clientWidth_);
     ReleaseDC(hwnd_, dc);
     scrollY_ = std::clamp(scrollY_, 0, MaxScroll());
 }
@@ -307,6 +350,7 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
         SetWindowTextW(address_, currentUrl_.c_str());
         if (!history_.empty()) history_[historyIndex_] = currentUrl_;
     }
+    images_.Clear();
     document_ = std::make_unique<html::Document>(std::move(result->document));
     sheet_.Parse(document_->embeddedCss);
     scrollY_ = 0;
@@ -322,6 +366,15 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     }
     UpdateButtons();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void BrowserWindow::OnImageReady(LoadedImage* raw) {
+    std::unique_ptr<LoadedImage> image(raw);
+    if (!image || image->generation != generation_) return;
+    if (images_.Decode(image->url, image->bytes)) {
+        Reflow();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
 }
 
 void BrowserWindow::Paint() {
@@ -373,6 +426,9 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return 0;
         case kPageReady:
             OnPageReady(reinterpret_cast<LoadedPage*>(lparam));
+            return 0;
+        case kImageReady:
+            OnImageReady(reinterpret_cast<LoadedImage*>(lparam));
             return 0;
         case WM_COMMAND:
             switch (LOWORD(wparam)) {

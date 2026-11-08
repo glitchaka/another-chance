@@ -4,8 +4,10 @@
 #include "net/HttpClient.h"
 #include "style/Style.h"
 #include "layout/Layout.h"
+#include "image/ImageStore.h"
 #include <windows.h>
 #include <condition_variable>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -26,6 +28,7 @@ public:
 
 private:
     static constexpr UINT kPageReady = WM_APP + 7;
+    static constexpr UINT kImageReady = WM_APP + 8;
     static constexpr int kToolbarHeight = 59;
     static constexpr int kStatusHeight = 26;
 
@@ -42,6 +45,12 @@ private:
         html::Document document;
     };
 
+    struct LoadedImage {
+        unsigned generation = 0;
+        std::wstring url;
+        std::string bytes;
+    };
+
     HWND hwnd_ = nullptr;
     HWND back_ = nullptr;
     HWND forward_ = nullptr;
@@ -55,10 +64,12 @@ private:
     std::unique_ptr<html::Document> document_;
     style::Sheet sheet_;
     layout::PageLayout layout_;
+    image::Store images_;
     int scrollY_ = 0;
     int clientWidth_ = 980;
     int clientHeight_ = 690;
     unsigned generation_ = 0;
+    std::atomic<unsigned> newestRequest_{0};
     bool isLoading_ = false;
 
     std::vector<std::wstring> history_;
@@ -93,6 +104,7 @@ private:
     void WorkerLoop();
     void StopWorker();
     void OnPageReady(LoadedPage* result);
+    void OnImageReady(LoadedImage* image);
     [[nodiscard]] std::wstring AddressText() const;
     [[nodiscard]] int MaxScroll() const;
     [[nodiscard]] RECT ContentRect() const;
