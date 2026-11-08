@@ -222,9 +222,26 @@ int wmain(int argc, wchar_t** argv) {
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
         browser.Navigate(page);
-        Check(Until([&] { return browser.IsAlive() &&
-            browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 30000),
-              "Could not render HTML fetched from loopback HTTP");
+        const bool loaded = Until([&] { return browser.IsAlive() &&
+            browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 30000);
+        if (!loaded) {
+            wchar_t title[1024]{};
+            GetWindowTextW(browser.Window(), title, 1024);
+            HWND label = FindWindowExW(browser.Window(), nullptr, L"Static", nullptr);
+            wchar_t status[1024]{};
+            if (label) GetWindowTextW(label, status, 1024);
+            HWND field = FindWindowExW(browser.Window(), nullptr, L"Edit", nullptr);
+            wchar_t address[1024]{};
+            if (field) GetWindowTextW(field, address, 1024);
+            std::wcerr << L"DIAG: alive=" << browser.IsAlive()
+                       << L" title=[" << title << L"] status=[" << status
+                       << L"] address=[" << address << L"]\n";
+            std::cerr << "DIAG: GET /start=" << server.htmlRequests.load()
+                      << " GET /style.css=" << server.cssRequests.load()
+                      << " GET /pixel.bmp=" << server.imageRequests.load()
+                      << "\n";
+        }
+        Check(loaded, "Could not render HTML fetched from loopback HTTP");
         std::cout << "PASS: open window + fetch HTML + parsed page title\n";
 
         Check(Until([&] { return server.cssRequests.load() > 0 &&
