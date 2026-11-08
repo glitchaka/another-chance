@@ -35,7 +35,7 @@ void TestHtml() {
     Check(link->parent != nullptr && link->parent->tag == "p", "open-tag stack");
     const auto* heading = Find(*document.root, "h1");
     Check(heading && !heading->children.empty(), "heading exists");
-    Check(heading->children.front()->text == "Hola \xC3\xB1and\xC3\xBA", "numeric UTF-8 entities");
+    Check(heading->children.front()->text == "Hola ñandú", "numeric UTF-8 entities");
     const auto* script = Find(*document.root, "script");
     Check(script != nullptr, "script is parsed but never executed");
 }
