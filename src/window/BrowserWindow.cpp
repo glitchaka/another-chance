@@ -159,7 +159,21 @@ void BrowserWindow::OnCreate() {
     Resize(client.right, client.bottom);
 
     worker_ = std::thread(&BrowserWindow::WorkerLoop, this);
-    Navigate(L"https://example.org", true);
+    document_ = std::make_unique<html::Document>(html::Parse(R"HTML(
+        <html><head><title>Another Chance</title>
+        <style>h1 {color:#24344a;} p {color:#526175;} a {color:#1762bf;}</style></head>
+        <body>
+          <h1>Another Chance</h1>
+          <p>Navegador nativo con motor HTML y CSS propio.</p>
+          <p>Introduce una direccion o una busqueda en la barra superior.</p>
+          <p><a href="https://example.org/">Abrir pagina de ejemplo</a></p>
+          <p>Nota: esta version experimental no ejecuta JavaScript y no soporta
+          todos los sitios web modernos.</p>
+        </body></html>
+    )HTML"));
+    sheet_.Parse(document_->embeddedCss);
+    Reflow();
+    SetStatus(L"Listo para navegar | Motor HTML/CSS original");
 }
 
 void BrowserWindow::OnDestroy() {

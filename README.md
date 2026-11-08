@@ -32,7 +32,9 @@ Ejecutable: `build/Release/AnotherChance.exe`.
 
 Direcciones HTTP/HTTPS, búsqueda desde la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. No interpreta JavaScript, no admite formularios interactivos y no promete renderizar correctamente todos los sitios modernos.
 
-La compilación x64 se verifica con el workflow de GitHub Actions `Windows C++ build`. Que compile no equivale a garantizar que todos los sitios se visualicen correctamente.
+La compilación x64 y los tests de HTML, CSS y URL se verifican con GitHub Actions. Además, `BrowserEndToEnd` inicia la aplicación Windows real, visita un servidor HTTP local, comprueba la carga de HTML, CSS e imágenes, sigue un enlace y utiliza el historial. No implica compatibilidad con toda la web moderna.
+
+El ejecutable Release utiliza la biblioteca de ejecución de MSVC enlazada estáticamente; no requiere instalar por separado Visual C++ Redistributable.
 
 ## Licencias
 
