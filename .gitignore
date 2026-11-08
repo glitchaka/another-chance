@@ -1,0 +1,12 @@
+/build/
+/.vs/
+/out/
+*.user
+*.suo
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.lib
+.DS_Store
