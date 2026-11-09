@@ -6,10 +6,22 @@
 #include <string>
 #include <utility>
 #include <unordered_set>
+#include <cstring>
 
 namespace ac {
 namespace {
 constexpr wchar_t kClassName[] = L"AnotherChance.NativeBrowser";
+void TraceBoot(const char* message) {
+    wchar_t path[2048]{};
+    if (GetEnvironmentVariableW(L"ANOTHER_CHANCE_TRACE_PATH", path, 2048) == 0) return;
+    HANDLE file = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    WriteFile(file, message, static_cast<DWORD>(strlen(message)), &written, nullptr);
+    WriteFile(file, "\r\n", 2, &written, nullptr);
+    CloseHandle(file);
+}
 
 void SetControlFont(HWND handle) {
     SendMessageW(handle, WM_SETFONT,
@@ -126,6 +138,7 @@ LRESULT CALLBACK BrowserWindow::AddressProc(HWND hwnd, UINT message,
 }
 
 void BrowserWindow::OnCreate() {
+    TraceBoot("OnCreate: begin");
     const HINSTANCE instance = reinterpret_cast<HINSTANCE>(
         GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE));
     auto button = [this, instance](WORD identifier, const wchar_t* caption) {
@@ -157,8 +170,10 @@ void BrowserWindow::OnCreate() {
     RECT client{};
     GetClientRect(hwnd_, &client);
     Resize(client.right, client.bottom);
+    TraceBoot("OnCreate: resized controls");
 
     worker_ = std::thread(&BrowserWindow::WorkerLoop, this);
+    TraceBoot("OnCreate: worker started");
     document_ = std::make_unique<html::Document>(html::Parse(R"HTML(
         <html><head><title>Another Chance</title>
         <style>h1 {color:#24344a;} p {color:#526175;} a {color:#1762bf;}</style></head>
@@ -171,9 +186,13 @@ void BrowserWindow::OnCreate() {
           todos los sitios web modernos.</p>
         </body></html>
     )HTML"));
+    TraceBoot("OnCreate: landing parsed");
     sheet_.Parse(document_->embeddedCss);
+    TraceBoot("OnCreate: CSS parsed");
     Reflow();
+    TraceBoot("OnCreate: layout completed");
     SetStatus(L"Listo para navegar | Motor HTML/CSS original");
+    TraceBoot("OnCreate: ready");
 }
 
 void BrowserWindow::OnDestroy() {

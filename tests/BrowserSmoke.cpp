@@ -10,6 +10,8 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -133,6 +135,10 @@ private:
 class BrowserProcess {
 public:
     explicit BrowserProcess(std::wstring executable) {
+        tracePath_ = std::filesystem::temp_directory_path() /
+            L"another_chance_boot_trace.txt";
+        std::filesystem::remove(tracePath_);
+        SetEnvironmentVariableW(L"ANOTHER_CHANCE_TRACE_PATH", tracePath_.c_str());
         STARTUPINFOW startup{};
         startup.cb = sizeof(startup);
         std::wstring command = L"\"" + executable + L"\"";
@@ -186,6 +192,7 @@ public:
 private:
     PROCESS_INFORMATION process_{};
     HWND window_ = nullptr;
+    std::filesystem::path tracePath_;
 
     HWND WaitForWindow() const {
         const auto start = GetTickCount64();
@@ -205,6 +212,19 @@ private:
             }
             Sleep(100);
         }
+        HWND found = FindWindowW(L"AnotherChance.NativeBrowser", nullptr);
+        if (found) {
+            wchar_t title[512]{};
+            GetWindowTextW(found, title, 512);
+            HWND status = FindWindowExW(found, nullptr, L"Static", nullptr);
+            wchar_t statusText[512]{};
+            if (status) GetWindowTextW(status, statusText, 512);
+            std::wcerr << L"DIAG startup: title=[" << title
+                       << L"] status=[" << statusText << L"]\n";
+        }
+        std::ifstream trace(tracePath_);
+        std::string line;
+        while (std::getline(trace, line)) std::cerr << "TRACE: " << line << "\n";
         return nullptr;
     }
 };
