@@ -20,5 +20,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AnotherChance-Windows-x64
-          path: build/Release/AnotherChance.exe
+          path: |
+            build/Release/AnotherChance.exe
+            build/Release/AnotherChance-actual.bmp
           if-no-files-found: error

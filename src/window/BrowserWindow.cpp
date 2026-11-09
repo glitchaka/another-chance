@@ -475,9 +475,7 @@ void BrowserWindow::OnImageReady(LoadedImage* raw) {
     }
 }
 
-void BrowserWindow::Paint() {
-    PAINTSTRUCT paint{};
-    HDC dc = BeginPaint(hwnd_, &paint);
+void BrowserWindow::DrawClient(HDC dc) {
     RECT client{0, 0, clientWidth_, clientHeight_};
     HBRUSH background = CreateSolidBrush(RGB(255,255,255));
     FillRect(dc, &client, background);
@@ -503,6 +501,12 @@ void BrowserWindow::Paint() {
         TextOutW(dc, 28, kToolbarHeight + 30,
                  L"Cargando la primera página...", 29);
     }
+}
+
+void BrowserWindow::Paint() {
+    PAINTSTRUCT paint{};
+    HDC dc = BeginPaint(hwnd_, &paint);
+    if (dc) DrawClient(dc);
     EndPaint(hwnd_, &paint);
 }
 
@@ -521,6 +525,9 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return 1;
         case WM_PAINT:
             Paint();
+            return 0;
+        case WM_PRINTCLIENT:
+            DrawClient(reinterpret_cast<HDC>(wparam));
             return 0;
         case kPageReady:
             OnPageReady(reinterpret_cast<LoadedPage*>(lparam));

@@ -12,6 +12,8 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <fstream>
+#include <vector>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -238,6 +240,58 @@ private:
     }
 };
 
+
+void CaptureScreenshot(HWND hwnd) {
+    RECT bounds{};
+    GetWindowRect(hwnd, &bounds);
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
+    if (width < 100 || height < 100 || width > 4096 || height > 4096) return;
+
+    HDC source = GetDC(hwnd);
+    if (!source) return;
+    HDC memory = CreateCompatibleDC(source);
+    HBITMAP bitmap = CreateCompatibleBitmap(source, width, height);
+    if (!memory || !bitmap) {
+        if (bitmap) DeleteObject(bitmap);
+        if (memory) DeleteDC(memory);
+        ReleaseDC(hwnd, source);
+        return;
+    }
+    HGDIOBJ previous = SelectObject(memory, bitmap);
+    const BOOL painted = PrintWindow(hwnd, memory, PW_RENDERFULLCONTENT);
+    if (!painted) {
+        BitBlt(memory, 0, 0, width, height, source, 0, 0, SRCCOPY);
+    }
+    SelectObject(memory, previous);
+
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 24;
+    info.bmiHeader.biCompression = BI_RGB;
+    const DWORD pitch = static_cast<DWORD>((width * 3 + 3) & ~3);
+    const DWORD pixels = pitch * static_cast<DWORD>(height);
+    std::vector<BYTE> data(pixels);
+    if (GetDIBits(source, bitmap, 0, static_cast<UINT>(height),
+                  data.data(), &info, DIB_RGB_COLORS) == static_cast<int>(height)) {
+        BITMAPFILEHEADER header{};
+        header.bfType = 0x4D42;
+        header.bfOffBits = sizeof(header) + sizeof(info.bmiHeader);
+        header.bfSize = header.bfOffBits + pixels;
+        std::ofstream file("AnotherChance-actual.bmp", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        file.write(reinterpret_cast<const char*>(&info.bmiHeader), sizeof(info.bmiHeader));
+        file.write(reinterpret_cast<const char*>(data.data()), data.size());
+    }
+
+    DeleteObject(bitmap);
+    DeleteDC(memory);
+    ReleaseDC(hwnd, source);
+}
+
 template<typename Predicate>
 bool Until(Predicate condition, unsigned timeoutMs) {
     const auto start = GetTickCount64();
@@ -293,6 +347,7 @@ int wmain(int argc, wchar_t** argv) {
             server.imageRequests.load() > 0; }, 12000),
               "Page did not request external CSS and image");
         std::cout << "PASS: load external CSS and image resources\n";
+        CaptureScreenshot(browser.Window());
 
         browser.ClickLink();
         Check(Until([&] { return browser.IsAlive() &&

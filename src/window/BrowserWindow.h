@@ -100,6 +100,7 @@ private:
     void Resize(int width, int height);
     void Reflow();
     void Paint();
+    void DrawClient(HDC dc);
     void Navigate(std::wstring address, bool recordHistory);
     void GoBack();
     void GoForward();
