@@ -105,7 +105,8 @@ LRESULT CALLBACK BrowserWindow::StaticProc(HWND hwnd, UINT message,
         auto* instance = static_cast<BrowserWindow*>(create->lpCreateParams);
         instance->hwnd_ = hwnd;
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(instance));
-        return TRUE;
+        // Default processing initializes the non-client window state and caption.
+        return DefWindowProcW(hwnd, message, wparam, lparam);
     }
     auto* instance = reinterpret_cast<BrowserWindow*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
