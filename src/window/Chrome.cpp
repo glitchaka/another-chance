@@ -10,18 +10,18 @@ namespace ac::chrome {
 namespace {
 using namespace Gdiplus;
 
-constexpr Color kTop(255, 226, 233, 244);
-constexpr Color kInactiveTab(255, 230, 235, 244);
-constexpr Color kSurface(255, 248, 250, 254);
-constexpr Color kText(255, 35, 48, 68);
-constexpr Color kMuted(255, 102, 116, 138);
-constexpr Color kBorder(255, 221, 227, 237);
-constexpr Color kAccent(255, 45, 120, 218);
+const Color kTop(255, 226, 233, 244);
+const Color kInactiveTab(255, 230, 235, 244);
+const Color kSurface(255, 248, 250, 254);
+const Color kText(255, 35, 48, 68);
+const Color kMuted(255, 102, 116, 138);
+const Color kBorder(255, 221, 227, 237);
+const Color kAccent(255, 45, 120, 218);
 
 bool Contains(RECT r, int x, int y) {
     return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
 }
-RECT Rect(int x, int y, int width, int height) {
+RECT MakeRect(int x, int y, int width, int height) {
     return {x, y, x + width, y + height};
 }
 void Rounded(Graphics& g, RectF r, float radius, const Color& fill,
@@ -128,9 +128,9 @@ Geometry Measure(int width, size_t tabCount) {
     const int left = std::max(210, (w - 700) / 2);
     const int right = std::min(w - 142, (w + 700) / 2);
     result.address = {left, 56, std::max(left + 180, right), 96};
-    result.bookmark = Rect(result.address.right - 33, 64, 24, 24);
-    result.menu = Rect(w - 48, 64, 29, 28);
-    result.plus = Rect(17 + result.tabWidth * count, 12, 29, 28);
+    result.bookmark = MakeRect(result.address.right - 33, 64, 24, 24);
+    result.menu = MakeRect(w - 48, 64, 29, 28);
+    result.plus = MakeRect(17 + result.tabWidth * count, 12, 29, 28);
     return result;
 }
 
@@ -141,19 +141,19 @@ Hit HitTest(int x, int y, int width, size_t tabCount) {
         const int count = static_cast<int>(std::max<size_t>(1, tabCount));
         if (Contains(g.plus, x, y)) return {Action::AddTab, 0};
         for (int i = 0; i < count; ++i) {
-            const RECT area = Rect(10 + i * g.tabWidth, 8, g.tabWidth - 2, 38);
+            const RECT area = MakeRect(10 + i * g.tabWidth, 8, g.tabWidth - 2, 38);
             if (Contains(area, x, y)) {
-                const RECT close = Rect(area.right - 31, 14, 23, 23);
+                const RECT close = MakeRect(area.right - 31, 14, 23, 23);
                 if (Contains(close, x, y)) return {Action::CloseTab, static_cast<size_t>(i)};
                 return {Action::SelectTab, static_cast<size_t>(i)};
             }
         }
         return {};
     }
-    if (Contains(Rect(12, 57, 36, 37), x, y)) return {Action::Back, 0};
-    if (Contains(Rect(49, 57, 36, 37), x, y)) return {Action::Forward, 0};
-    if (Contains(Rect(89, 57, 36, 37), x, y)) return {Action::Reload, 0};
-    if (Contains(Rect(128, 57, 36, 37), x, y)) return {Action::Home, 0};
+    if (Contains(MakeRect(12, 57, 36, 37), x, y)) return {Action::Back, 0};
+    if (Contains(MakeRect(49, 57, 36, 37), x, y)) return {Action::Forward, 0};
+    if (Contains(MakeRect(89, 57, 36, 37), x, y)) return {Action::Reload, 0};
+    if (Contains(MakeRect(128, 57, 36, 37), x, y)) return {Action::Home, 0};
     if (Contains(g.bookmark, x, y)) return {Action::Bookmark, 0};
     if (Contains(g.menu, x, y)) return {Action::Menu, 0};
     return {};

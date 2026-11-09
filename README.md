@@ -25,7 +25,7 @@ Ejecutable: `build/Release/AnotherChance.exe`.
 - `src/style/`: parser y aplicación de un subconjunto CSS.
 - `src/layout/`: composición de texto, imágenes y regiones clicables.
 - `src/image/`: decodificación PNG/JPEG/GIF mediante WIC nativo de Windows.
-- `src/window/`: ventana, barra de navegación, historial, desplazamiento y rasterizado por GDI.
+- `src/window/`: ventana Win32, pestañas funcionales (recargan al cambiar), historial independiente, barra de navegación y chrome vectorial original dibujado con GDI+.
 - `src/util/`: Unicode y resolución de URL.
 
 ## Estado funcional inicial
@@ -39,3 +39,7 @@ El ejecutable Release utiliza la biblioteca de ejecución de MSVC enlazada está
 ## Licencias
 
 Código derivado de DOOM 3 BFG: GPLv3 con los términos adicionales y exclusiones detallados en `COPYING.txt`; se mantiene la atribución a id Software. El código nuevo del repositorio se distribuye bajo GPLv3. Los componentes de Windows se enlazan mediante sus API públicas y no se copian sus implementaciones.
+
+## Interfaz
+
+Diseño nativo renovado inspirado en las referencias proporcionadas: franja superior de pestañas, botones vectoriales minimalistas y barra de dirección redondeada sobre fondo claro. No usa HTML/CSS para la interfaz. Puede abrir hasta cinco pestañas independientes (las páginas se recargan al volver a una pestaña). El marcador de estrella se conserva durante la sesión, no en disco. Accesos: Ctrl+T, Ctrl+W, Ctrl+L, Alt+flechas, F5.

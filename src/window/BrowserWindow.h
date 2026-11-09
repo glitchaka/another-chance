@@ -5,6 +5,8 @@
 #include "style/Style.h"
 #include "layout/Layout.h"
 #include "image/ImageStore.h"
+#include "window/Chrome.h"
+#include <unordered_set>
 #include <windows.h>
 #include <condition_variable>
 #include <atomic>
@@ -24,14 +26,18 @@ public:
     static constexpr WORD kReload = 103;
     static constexpr WORD kGo = 104;
     static constexpr WORD kFocus = 105;
+    static constexpr WORD kNewTab = 106;
+    static constexpr WORD kCloseTab = 107;
+    static constexpr WORD kBookmark = 108;
+    static constexpr WORD kHome = 109;
     static HWND Create(HINSTANCE instance, std::wstring initialUrl = {});
 
 private:
     static constexpr UINT kPageReady = WM_APP + 7;
     static constexpr UINT kImageReady = WM_APP + 8;
     static constexpr UINT kStyleReady = WM_APP + 9;
-    static constexpr int kToolbarHeight = 59;
-    static constexpr int kStatusHeight = 26;
+    static constexpr int kToolbarHeight = chrome::kToolbarHeight;
+    static constexpr int kStatusHeight = chrome::kStatusHeight;
 
     struct NavigationJob {
         idQueueNode<NavigationJob> queueNode;
@@ -63,6 +69,21 @@ private:
     HWND address_ = nullptr;
     HWND go_ = nullptr;
     HWND status_ = nullptr;
+    HFONT chromeFont_ = nullptr;
+    HFONT statusFont_ = nullptr;
+    HBRUSH addressBrush_ = nullptr;
+    HBRUSH statusBrush_ = nullptr;
+
+    struct TabState {
+        std::wstring url;
+        std::wstring title = L"Nueva pestaña";
+        std::vector<std::wstring> history;
+        size_t historyIndex = 0;
+        int scroll = 0;
+    };
+    std::vector<TabState> tabs_;
+    size_t activeTab_ = 0;
+    std::unordered_set<std::wstring> bookmarks_;
 
     std::wstring currentUrl_;
     std::wstring initialUrl_;
@@ -101,6 +122,13 @@ private:
     void Reflow();
     void Paint();
     void DrawClient(HDC dc);
+    void ShowHome();
+    void SaveActiveTab();
+    void SwitchTab(size_t index);
+    void OpenTab();
+    void CloseTab(size_t index);
+    void ToggleBookmark();
+    void OpenMenu();
     void Navigate(std::wstring address, bool recordHistory);
     void GoBack();
     void GoForward();

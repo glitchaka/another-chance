@@ -72,6 +72,10 @@ std::string EscapeHtml(const std::string& input) {
 
 BrowserWindow::~BrowserWindow() {
     StopWorker();
+    if (chromeFont_) DeleteObject(chromeFont_);
+    if (statusFont_) DeleteObject(statusFont_);
+    if (addressBrush_) DeleteObject(addressBrush_);
+    if (statusBrush_) DeleteObject(statusBrush_);
 }
 
 HWND BrowserWindow::Create(HINSTANCE instance, std::wstring initialUrl) {
@@ -141,29 +145,28 @@ void BrowserWindow::OnCreate() {
     TraceBoot("OnCreate: begin");
     const HINSTANCE instance = reinterpret_cast<HINSTANCE>(
         GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE));
-    auto button = [this, instance](WORD identifier, const wchar_t* caption) {
-        HWND handle = CreateWindowExW(0, L"BUTTON", caption,
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            0, 0, 70, 30, hwnd_,
-            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(identifier)), instance, nullptr);
-        SetControlFont(handle);
-        return handle;
-    };
-    back_ = button(kBack, L"\u2190 Atrás");
-    forward_ = button(kForward, L"Adelante \u2192");
-    reload_ = button(kReload, L"\u21bb");
-    address_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+    chromeFont_ = CreateFontW(-18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    statusFont_ = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    addressBrush_ = CreateSolidBrush(RGB(255, 255, 255));
+    statusBrush_ = CreateSolidBrush(RGB(246, 248, 252));
+    address_ = CreateWindowExW(0, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-        0, 0, 100, 30, hwnd_,
+        0, 0, 180, 28, hwnd_,
         reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kGo + 100)),
         instance, nullptr);
-    SetControlFont(address_);
-    go_ = button(kGo, L"Ir");
-    status_ = CreateWindowExW(0, L"STATIC", L"Preparando motor web original...",
+    if (chromeFont_) SendMessageW(address_, WM_SETFONT,
+        reinterpret_cast<WPARAM>(chromeFont_), TRUE);
+    status_ = CreateWindowExW(0, L"STATIC", L"",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        0, 0, 100, 26, hwnd_, nullptr, instance, nullptr);
-    SetControlFont(status_);
+        0, 0, 200, 20, hwnd_, nullptr, instance, nullptr);
+    if (statusFont_) SendMessageW(status_, WM_SETFONT,
+        reinterpret_cast<WPARAM>(statusFont_), TRUE);
 
+    tabs_.emplace_back();
     if (!SetWindowSubclass(address_, &BrowserWindow::AddressSubclass,
                            1, reinterpret_cast<DWORD_PTR>(this))) {
         TraceBoot("OnCreate: address bar subclass failed");
@@ -175,25 +178,7 @@ void BrowserWindow::OnCreate() {
 
     worker_ = std::thread(&BrowserWindow::WorkerLoop, this);
     TraceBoot("OnCreate: worker started");
-    document_ = std::make_unique<html::Document>(html::Parse(R"HTML(
-        <html><head><title>Another Chance</title>
-        <style>h1 {color:#24344a;} p {color:#526175;} a {color:#1762bf;}</style></head>
-        <body>
-          <h1>Another Chance</h1>
-          <p>Navegador nativo con motor HTML y CSS propio.</p>
-          <p>Introduce una direccion o una busqueda en la barra superior.</p>
-          <p><a href="https://example.org/">Abrir pagina de ejemplo</a></p>
-          <p>Nota: esta version experimental no ejecuta JavaScript y no soporta
-          todos los sitios web modernos.</p>
-        </body></html>
-    )HTML"));
-    TraceBoot("OnCreate: landing parsed");
-    sheet_.Parse(document_->embeddedCss);
-    TraceBoot("OnCreate: CSS parsed");
-    Reflow();
-    TraceBoot("OnCreate: layout completed");
-    SetStatus(L"Listo para navegar | Motor HTML/CSS original");
-    TraceBoot("OnCreate: ready");
+    ShowHome();
     if (!initialUrl_.empty()) {
         Navigate(initialUrl_, true);
     }
@@ -318,6 +303,138 @@ void BrowserWindow::WorkerLoop() {
     }
 }
 
+void BrowserWindow::ShowHome() {
+    ++generation_;
+    newestRequest_.store(generation_);
+    {
+        std::lock_guard guard(taskMutex_);
+        while (!pendingJobs_.IsEmpty()) delete pendingJobs_.RemoveFirst();
+    }
+    currentUrl_.clear();
+    isLoading_ = false;
+    history_.clear();
+    historyIndex_ = 0;
+    scrollY_ = 0;
+    images_.Clear();
+    document_ = std::make_unique<html::Document>(html::Parse(R"HTML(
+        <html><head><title>Otra oportunidad</title>
+        <style>
+            h1 { color: #263d60; font-size: 32px; }
+            p { color: #586d8a; font-size: 17px; }
+            a { color: #2979d4; }
+        </style></head>
+        <body>
+          <h1>Another Chance</h1>
+          <p>Una nueva forma de explorar. Navegador nativo con motor propio.</p>
+          <p>Escribe una dirección o búsqueda en la barra superior.</p>
+          <p><a href="https://example.org/">Visitar la página de ejemplo</a></p>
+          <p>Versión experimental: algunos sitios requieren tecnologías
+             que todavía no están implementadas.</p>
+        </body></html>
+    )HTML"));
+    sheet_.Parse(document_->embeddedCss);
+    tabs_[activeTab_].title = L"Nueva pestaña";
+    tabs_[activeTab_].url.clear();
+    tabs_[activeTab_].history.clear();
+    tabs_[activeTab_].historyIndex = 0;
+    tabs_[activeTab_].scroll = 0;
+    SetWindowTextW(address_, L"");
+    SetWindowTextW(hwnd_, L"Another Chance");
+    Reflow();
+    SetStatus(L"Listo · HTML/CSS propio · Sin Chromium ni Firefox");
+    UpdateButtons();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void BrowserWindow::SaveActiveTab() {
+    if (activeTab_ >= tabs_.size()) return;
+    auto& tab = tabs_[activeTab_];
+    tab.url = currentUrl_;
+    tab.history = history_;
+    tab.historyIndex = historyIndex_;
+    tab.scroll = scrollY_;
+}
+
+void BrowserWindow::SwitchTab(size_t index) {
+    if (index >= tabs_.size() || index == activeTab_) return;
+    SaveActiveTab();
+    activeTab_ = index;
+    const TabState tab = tabs_[activeTab_];
+    if (tab.url.empty()) {
+        ShowHome();
+    } else {
+        history_ = tab.history;
+        historyIndex_ = tab.historyIndex;
+        Navigate(tab.url, false);
+    }
+    SetFocus(hwnd_);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void BrowserWindow::OpenTab() {
+    if (tabs_.size() >= 5) {
+        SetStatus(L"Esta versión admite hasta cinco pestañas.");
+        return;
+    }
+    SaveActiveTab();
+    tabs_.emplace_back();
+    activeTab_ = tabs_.size() - 1;
+    ShowHome();
+    SetFocus(address_);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void BrowserWindow::CloseTab(size_t index) {
+    if (index >= tabs_.size()) return;
+    if (tabs_.size() == 1) {
+        ShowHome();
+        return;
+    }
+    SaveActiveTab();
+    const bool wasCurrent = index == activeTab_;
+    tabs_.erase(tabs_.begin() + static_cast<std::ptrdiff_t>(index));
+    if (index < activeTab_) --activeTab_;
+    if (wasCurrent) {
+        activeTab_ = std::min(index, tabs_.size() - 1);
+        const TabState tab = tabs_[activeTab_];
+        if (tab.url.empty()) ShowHome();
+        else {
+            history_ = tab.history;
+            historyIndex_ = tab.historyIndex;
+            Navigate(tab.url, false);
+        }
+    }
+    Resize(clientWidth_, clientHeight_);
+}
+
+void BrowserWindow::ToggleBookmark() {
+    if (currentUrl_.empty()) return;
+    if (bookmarks_.contains(currentUrl_)) {
+        bookmarks_.erase(currentUrl_);
+        SetStatus(L"Marcador eliminado");
+    } else {
+        bookmarks_.insert(currentUrl_);
+        SetStatus(L"Página añadida a marcadores de la sesión");
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void BrowserWindow::OpenMenu() {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, kNewTab, L"Nueva pestaña\tCtrl+T");
+    AppendMenuW(menu, MF_STRING, kCloseTab, L"Cerrar pestaña\tCtrl+W");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kHome, L"Página de inicio");
+    AppendMenuW(menu, MF_STRING, kReload, L"Recargar\tF5");
+    AppendMenuW(menu, MF_STRING, kBookmark, L"Guardar marcador");
+    POINT point{clientWidth_ - 48, 102};
+    ClientToScreen(hwnd_, &point);
+    TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                   point.x, point.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
 void BrowserWindow::SetStatus(const std::wstring& message) {
     if (status_) SetWindowTextW(status_, message.c_str());
 }
@@ -345,6 +462,8 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
         historyIndex_ = history_.size() - 1;
     }
     currentUrl_ = address;
+    tabs_[activeTab_].url = address;
+    tabs_[activeTab_].title = L"Cargando…";
     SetWindowTextW(address_, address.c_str());
     UpdateButtons();
     isLoading_ = true;
@@ -376,9 +495,10 @@ void BrowserWindow::Reload() {
     if (!currentUrl_.empty()) Navigate(currentUrl_, false);
 }
 void BrowserWindow::UpdateButtons() {
-    EnableWindow(back_, !history_.empty() && historyIndex_ > 0);
-    EnableWindow(forward_, !history_.empty() && historyIndex_ + 1 < history_.size());
-    EnableWindow(reload_, !currentUrl_.empty());
+    if (hwnd_) {
+        RECT area{0, 0, clientWidth_, kToolbarHeight};
+        InvalidateRect(hwnd_, &area, FALSE);
+    }
 }
 
 std::wstring BrowserWindow::AddressText() const {
@@ -406,15 +526,16 @@ int BrowserWindow::MaxScroll() const {
 void BrowserWindow::Resize(int width, int height) {
     clientWidth_ = std::max(1, width);
     clientHeight_ = std::max(1, height);
-    const int buttonY = 13;
-    MoveWindow(back_, 10, buttonY, 80, 32, TRUE);
-    MoveWindow(forward_, 96, buttonY, 98, 32, TRUE);
-    MoveWindow(reload_, 200, buttonY, 42, 32, TRUE);
-    const int addressWidth = std::max(140, width - 336);
-    MoveWindow(address_, 250, buttonY, addressWidth, 32, TRUE);
-    MoveWindow(go_, std::max(396, width - 78), buttonY, 68, 32, TRUE);
-    MoveWindow(status_, 12, std::max(kToolbarHeight, height - kStatusHeight + 5),
-               std::max(100, width - 24), 20, TRUE);
+    const auto geometry = chrome::Measure(clientWidth_, tabs_.size());
+    if (address_) {
+        MoveWindow(address_, geometry.address.left + 38, 62,
+                   std::max(90, geometry.address.right - geometry.address.left - 83),
+                   26, TRUE);
+    }
+    if (status_) {
+        MoveWindow(status_, 15, std::max(kToolbarHeight, clientHeight_ - kStatusHeight + 5),
+                   std::max(100, clientWidth_ - 30), 18, TRUE);
+    }
     if (document_) Reflow();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -443,6 +564,8 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     scrollY_ = 0;
     Reflow();
     const std::wstring title = url::ToWide(document_->title);
+    tabs_[activeTab_].title = title.empty() ? L"Página sin título" : title;
+    tabs_[activeTab_].url = currentUrl_;
     SetWindowTextW(hwnd_, (title.empty() ? L"Another Chance" :
         title + L" — Another Chance").c_str());
     if (result->response.Ok()) {
@@ -477,30 +600,23 @@ void BrowserWindow::OnImageReady(LoadedImage* raw) {
 
 void BrowserWindow::DrawClient(HDC dc) {
     RECT client{0, 0, clientWidth_, clientHeight_};
-    HBRUSH background = CreateSolidBrush(RGB(255,255,255));
+    HBRUSH background = CreateSolidBrush(RGB(255, 255, 255));
     FillRect(dc, &client, background);
     DeleteObject(background);
-
-    const RECT toolbar{0, 0, clientWidth_, kToolbarHeight};
-    HBRUSH toolbarBrush = CreateSolidBrush(RGB(29,35,45));
-    FillRect(dc, &toolbar, toolbarBrush);
-    DeleteObject(toolbarBrush);
-
-    const RECT statusRect{0, std::max(kToolbarHeight, clientHeight_ - kStatusHeight),
-        clientWidth_, clientHeight_};
-    HBRUSH statusBrush = CreateSolidBrush(RGB(242,244,247));
-    FillRect(dc, &statusRect, statusBrush);
-    DeleteObject(statusBrush);
 
     RECT view = ContentRect();
     if (document_) {
         layout_.Draw(dc, view.top, scrollY_, view);
-    } else {
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(80, 88, 99));
-        TextOutW(dc, 28, kToolbarHeight + 30,
-                 L"Cargando la primera página...", 29);
     }
+    std::vector<chrome::Tab> tabLabels;
+    tabLabels.reserve(tabs_.size());
+    for (size_t i = 0; i < tabs_.size(); ++i) {
+        tabLabels.push_back({tabs_[i].title, i == activeTab_ && isLoading_});
+    }
+    chrome::Draw(dc, clientWidth_, clientHeight_, tabLabels, activeTab_,
+                 !history_.empty() && historyIndex_ > 0,
+                 !history_.empty() && historyIndex_ + 1 < history_.size(),
+                 bookmarks_.contains(currentUrl_), isLoading_);
 }
 
 void BrowserWindow::Paint() {
@@ -529,6 +645,14 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
         case WM_PRINTCLIENT:
             DrawClient(reinterpret_cast<HDC>(wparam));
             return 0;
+        case WM_CTLCOLOREDIT:
+            SetBkColor(reinterpret_cast<HDC>(wparam), RGB(255, 255, 255));
+            SetTextColor(reinterpret_cast<HDC>(wparam), RGB(46, 59, 77));
+            return reinterpret_cast<LRESULT>(addressBrush_);
+        case WM_CTLCOLORSTATIC:
+            SetBkColor(reinterpret_cast<HDC>(wparam), RGB(246, 248, 252));
+            SetTextColor(reinterpret_cast<HDC>(wparam), RGB(98, 111, 130));
+            return reinterpret_cast<LRESULT>(statusBrush_);
         case kPageReady:
             OnPageReady(reinterpret_cast<LoadedPage*>(lparam));
             return 0;
@@ -544,6 +668,10 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 case kForward: GoForward(); return 0;
                 case kReload: Reload(); return 0;
                 case kGo: Navigate(AddressText(), true); return 0;
+                case kNewTab: OpenTab(); return 0;
+                case kCloseTab: CloseTab(activeTab_); return 0;
+                case kBookmark: ToggleBookmark(); return 0;
+                case kHome: ShowHome(); return 0;
                 case kFocus:
                     SetFocus(address_);
                     SendMessageW(address_, EM_SETSEL, 0, -1);
@@ -560,6 +688,22 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
         case WM_LBUTTONUP: {
             const int x = GET_X_LPARAM(lparam);
             const int y = GET_Y_LPARAM(lparam);
+            if (y < kToolbarHeight) {
+                const auto hit = chrome::HitTest(x, y, clientWidth_, tabs_.size());
+                switch (hit.action) {
+                    case chrome::Action::Back: GoBack(); break;
+                    case chrome::Action::Forward: GoForward(); break;
+                    case chrome::Action::Reload: Reload(); break;
+                    case chrome::Action::Home: ShowHome(); break;
+                    case chrome::Action::Bookmark: ToggleBookmark(); break;
+                    case chrome::Action::Menu: OpenMenu(); break;
+                    case chrome::Action::AddTab: OpenTab(); break;
+                    case chrome::Action::SelectTab: SwitchTab(hit.tab); break;
+                    case chrome::Action::CloseTab: CloseTab(hit.tab); break;
+                    case chrome::Action::None: break;
+                }
+                return 0;
+            }
             const auto content = ContentRect();
             if (y >= content.top && y < content.bottom && document_) {
                 const std::wstring link = layout_.LinkAt(x, y, content.top, scrollY_);
@@ -573,6 +717,12 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 GetCursorPos(&point);
                 ScreenToClient(hwnd_, &point);
                 const RECT content = ContentRect();
+                if (point.y < kToolbarHeight && chrome::HitTest(
+                        point.x, point.y, clientWidth_, tabs_.size()).action !=
+                        chrome::Action::None) {
+                    SetCursor(LoadCursorW(nullptr, IDC_HAND));
+                    return TRUE;
+                }
                 if (point.y >= content.top && point.y < content.bottom &&
                     !layout_.LinkAt(point.x, point.y, content.top, scrollY_).empty()) {
                     SetCursor(LoadCursorW(nullptr, IDC_HAND));
