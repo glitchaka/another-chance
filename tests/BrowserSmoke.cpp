@@ -360,6 +360,23 @@ int wmain(int argc, wchar_t** argv) {
             browser.HasTitle(L"Inicio de prueba") && server.htmlRequests.load() > 1; }, 15000),
               "Browser back history did not navigate");
         std::cout << "PASS: back navigation\n";
+
+        // Tabs are real controls: create a tab, then return to the first
+        // and verify that its URL/history can be restored.
+        PostMessageW(browser.Window(), WM_LBUTTONUP, MK_LBUTTON,
+                     MAKELPARAM(255, 26));
+        Check(Until([&] { return browser.IsAlive() &&
+            browser.HasTitle(L"Another Chance") && !browser.HasHttp200(); }, 8000),
+              "New tab did not open its home page");
+        std::cout << "PASS: create and activate a new tab\n";
+
+        PostMessageW(browser.Window(), WM_LBUTTONUP, MK_LBUTTON,
+                     MAKELPARAM(62, 26));
+        Check(Until([&] { return browser.IsAlive() &&
+            browser.HasTitle(L"Inicio de prueba") &&
+            server.htmlRequests.load() >= 3; }, 14000),
+              "Switching back to first tab did not restore navigation");
+        std::cout << "PASS: switch tab and restore previous URL\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';
