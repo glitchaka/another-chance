@@ -379,23 +379,15 @@ void BrowserWindow::UpdateButtons() {
 }
 
 std::wstring BrowserWindow::AddressText() const {
-    // Always resolve by the native child-control ID so the address bar remains
-    // the source of truth for both keyboard and button navigation.
     const HWND edit = GetDlgItem(hwnd_, kGo + 100);
-    const int count = edit ? GetWindowTextLengthW(edit) : 0;
-    const std::string diagnostic = "AddressText: internal=" +
-        std::to_string(reinterpret_cast<uintptr_t>(address_)) +
-        " child=" + std::to_string(reinterpret_cast<uintptr_t>(edit)) +
-        " child-valid=" + std::to_string(edit && IsWindow(edit)) +
-        " internal-valid=" + std::to_string(address_ && IsWindow(address_)) +
-        " length=" + std::to_string(count);
-    TraceBoot(diagnostic.c_str());
-    if (count <= 0) return {};
-    std::wstring result(static_cast<size_t>(count) + 1, L'\0');
-    const int written = GetWindowTextW(edit, result.data(), count + 1);
+    if (!edit || !IsWindow(edit)) return {};
+    std::wstring result(16384, L'\0');
+    const int written = GetWindowTextW(edit, result.data(),
+                                       static_cast<int>(result.size()));
     result.resize(static_cast<size_t>(std::max(0, written)));
-    const std::string textDiagnostic = "AddressText result=" + url::ToUtf8(result);
-    TraceBoot(textDiagnostic.c_str());
+    const std::string diagnostic = "AddressText direct: length=" +
+        std::to_string(written) + " value=" + url::ToUtf8(result);
+    TraceBoot(diagnostic.c_str());
     return result;
 }
 

@@ -164,8 +164,11 @@ public:
         HWND field = FindWindowExW(window_, nullptr, L"Edit", nullptr);
         Check(field != nullptr, "Address bar missing");
         Check(SetWindowTextW(field, address.c_str()) != FALSE, "Could not type address");
-        Check(PostMessageW(window_, WM_COMMAND, MAKEWPARAM(104, BN_CLICKED), 0) != FALSE,
-              "Go command failed");
+        wchar_t typed[2048]{};
+        GetWindowTextW(field, typed, 2048);
+        std::wcerr << L"DIAG input set: [" << typed << L"]\n";
+        Check(std::wstring_view(typed) == address, "Address edit rejected test input");
+        SendMessageW(window_, WM_COMMAND, MAKEWPARAM(104, BN_CLICKED), 0);
     }
     bool HasTitle(std::wstring_view expected) const {
         wchar_t title[512]{};
