@@ -24,7 +24,7 @@ public:
     static constexpr WORD kReload = 103;
     static constexpr WORD kGo = 104;
     static constexpr WORD kFocus = 105;
-    static HWND Create(HINSTANCE instance);
+    static HWND Create(HINSTANCE instance, std::wstring initialUrl = {});
 
 private:
     static constexpr UINT kPageReady = WM_APP + 7;
@@ -65,6 +65,7 @@ private:
     HWND status_ = nullptr;
 
     std::wstring currentUrl_;
+    std::wstring initialUrl_;
     std::unique_ptr<html::Document> document_;
     style::Sheet sheet_;
     layout::PageLayout layout_;

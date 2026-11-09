@@ -74,7 +74,7 @@ BrowserWindow::~BrowserWindow() {
     StopWorker();
 }
 
-HWND BrowserWindow::Create(HINSTANCE instance) {
+HWND BrowserWindow::Create(HINSTANCE instance, std::wstring initialUrl) {
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = &BrowserWindow::StaticProc;
@@ -86,6 +86,7 @@ HWND BrowserWindow::Create(HINSTANCE instance) {
     RegisterClassExW(&wc);
 
     auto* window = new BrowserWindow();
+    window->initialUrl_ = std::move(initialUrl);
     HWND hwnd = CreateWindowExW(WS_EX_APPWINDOW, kClassName, L"Another Chance",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT, CW_USEDEFAULT, 1060, 780,
@@ -193,6 +194,9 @@ void BrowserWindow::OnCreate() {
     TraceBoot("OnCreate: layout completed");
     SetStatus(L"Listo para navegar | Motor HTML/CSS original");
     TraceBoot("OnCreate: ready");
+    if (!initialUrl_.empty()) {
+        Navigate(initialUrl_, true);
+    }
 }
 
 void BrowserWindow::OnDestroy() {

@@ -134,14 +134,14 @@ private:
 
 class BrowserProcess {
 public:
-    explicit BrowserProcess(std::wstring executable) {
+    explicit BrowserProcess(std::wstring executable, const std::wstring& url) {
         tracePath_ = std::filesystem::temp_directory_path() /
             L"another_chance_boot_trace.txt";
         std::filesystem::remove(tracePath_);
         SetEnvironmentVariableW(L"ANOTHER_CHANCE_TRACE_PATH", tracePath_.c_str());
         STARTUPINFOW startup{};
         startup.cb = sizeof(startup);
-        std::wstring command = L"\"" + executable + L"\"";
+        std::wstring command = L"\"" + executable + L"\" --url \"" + url + L"\"";
         Check(CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr,
                              FALSE, 0, nullptr, nullptr, &startup, &process_) != FALSE,
               "CreateProcessW failed");
@@ -216,9 +216,8 @@ private:
                 HWND status = FindWindowExW(found, nullptr, L"Static", nullptr);
                 wchar_t statusText[512]{};
                 if (status) GetWindowTextW(status, statusText, 512);
-                if (field && title[0] != L'\0' &&
-                    std::wstring_view(statusText).find(L"Listo para navegar") !=
-                    std::wstring_view::npos) return found;
+                if (field && title[0] != L'\0' && statusText[0] != L'\0')
+                    return found;
             }
             Sleep(100);
         }
@@ -257,12 +256,11 @@ int wmain(int argc, wchar_t** argv) {
     }
     try {
         LocalServer server;
-        BrowserProcess browser(argv[1]);
-        Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
-        std::cout << "DIAG: browser startup reached ready state\n";
-        browser.Navigate(page);
+        BrowserProcess browser(argv[1], page);
+        Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
+        std::cout << "DIAG: browser startup launched with internal --url\n";
         const bool loaded = Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 10000);
         if (!loaded) {

@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <objbase.h>
+#include <shellapi.h>
+#include <string>
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     SetProcessDPIAware();
@@ -11,7 +13,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     controls.dwICC = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
     InitCommonControlsEx(&controls);
 
-    HWND window = ac::BrowserWindow::Create(instance);
+    std::wstring initialUrl;
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv) {
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (std::wstring_view(argv[i]) == L"--url") {
+                initialUrl = argv[i + 1];
+                break;
+            }
+        }
+        LocalFree(argv);
+    }
+
+    HWND window = ac::BrowserWindow::Create(instance, std::move(initialUrl));
     if (!window) {
         MessageBoxW(nullptr, L"No se pudo crear la ventana de Another Chance.",
                     L"Another Chance", MB_ICONERROR | MB_OK);
