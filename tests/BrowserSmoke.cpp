@@ -269,7 +269,7 @@ int wmain(int argc, wchar_t** argv) {
                        << L"] address=[" << address << L"]\n";
             wchar_t tracePath[2048]{};
             if (GetEnvironmentVariableW(L"ANOTHER_CHANCE_TRACE_PATH", tracePath, 2048)) {
-                std::ifstream trace(std::filesystem::path(tracePath));
+                std::ifstream trace{std::filesystem::path(tracePath)};
                 std::string line;
                 while (std::getline(trace, line)) std::cerr << "TRACE: " << line << "\n";
             }
