@@ -163,7 +163,14 @@ public:
     void Navigate(const std::wstring& address) {
         HWND field = FindWindowExW(window_, nullptr, L"Edit", nullptr);
         Check(field != nullptr, "Address bar missing");
-        Check(SetWindowTextW(field, address.c_str()) != FALSE, "Could not type address");
+        // Cross-process SetWindowText can modify the cached window caption
+        // without exercising the actual EDIT control's input path.
+        // Send keystrokes to the EDIT proc, as a user would type them.
+        SendMessageW(field, EM_SETSEL, 0, -1);
+        SendMessageW(field, WM_CLEAR, 0, 0);
+        for (wchar_t character : address) {
+            SendMessageW(field, WM_CHAR, static_cast<WPARAM>(character), 1);
+        }
         wchar_t typed[2048]{};
         GetWindowTextW(field, typed, 2048);
         std::wcerr << L"DIAG input set: [" << typed << L"]\n";
