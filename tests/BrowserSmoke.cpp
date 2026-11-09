@@ -254,7 +254,7 @@ int wmain(int argc, wchar_t** argv) {
         std::cout << "DIAG: browser startup reached ready state\n";
         browser.Navigate(page);
         const bool loaded = Until([&] { return browser.IsAlive() &&
-            browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 30000);
+            browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 10000);
         if (!loaded) {
             wchar_t title[1024]{};
             GetWindowTextW(browser.Window(), title, 1024);
@@ -267,6 +267,12 @@ int wmain(int argc, wchar_t** argv) {
             std::wcerr << L"DIAG: alive=" << browser.IsAlive()
                        << L" title=[" << title << L"] status=[" << status
                        << L"] address=[" << address << L"]\n";
+            wchar_t tracePath[2048]{};
+            if (GetEnvironmentVariableW(L"ANOTHER_CHANCE_TRACE_PATH", tracePath, 2048)) {
+                std::ifstream trace(std::filesystem::path(tracePath));
+                std::string line;
+                while (std::getline(trace, line)) std::cerr << "TRACE: " << line << "\n";
+            }
             std::cerr << "DIAG: GET /start=" << server.htmlRequests.load()
                       << " GET /style.css=" << server.cssRequests.load()
                       << " GET /pixel.bmp=" << server.imageRequests.load()

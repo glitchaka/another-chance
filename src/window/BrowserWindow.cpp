@@ -320,7 +320,13 @@ void BrowserWindow::SetStatus(const std::wstring& message) {
 }
 
 void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
+    const std::string inputTrace = "Navigate: input length=" + std::to_string(address.size()) +
+        " value=" + url::ToUtf8(address);
+    TraceBoot(inputTrace.c_str());
     address = url::Normalize(std::move(address));
+    const std::string normalizedTrace = "Navigate: normalized length=" +
+        std::to_string(address.size()) + " value=" + url::ToUtf8(address);
+    TraceBoot(normalizedTrace.c_str());
     if (address.empty()) {
         SetStatus(L"Dirección no admitida. Escribe una URL HTTP/HTTPS o una búsqueda.");
         return;
