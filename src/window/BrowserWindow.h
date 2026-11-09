@@ -63,7 +63,6 @@ private:
     HWND address_ = nullptr;
     HWND go_ = nullptr;
     HWND status_ = nullptr;
-    WNDPROC oldAddressProc_ = nullptr;
 
     std::wstring currentUrl_;
     std::unique_ptr<html::Document> document_;
@@ -91,8 +90,8 @@ private:
 
     static LRESULT CALLBACK StaticProc(HWND hwnd, UINT message,
                                        WPARAM wparam, LPARAM lparam);
-    static LRESULT CALLBACK AddressProc(HWND hwnd, UINT message,
-                                        WPARAM wparam, LPARAM lparam);
+    static LRESULT CALLBACK AddressSubclass(HWND hwnd, UINT message,
+                WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR context);
     LRESULT HandleMessage(UINT message, WPARAM wparam, LPARAM lparam);
 
     void OnCreate();

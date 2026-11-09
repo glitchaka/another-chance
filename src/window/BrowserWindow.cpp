@@ -1,6 +1,7 @@
 #include "window/BrowserWindow.h"
 #include "util/Url.h"
 #include <windowsx.h>
+#include <commctrl.h>
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -120,13 +121,10 @@ LRESULT CALLBACK BrowserWindow::StaticProc(HWND hwnd, UINT message,
     return instance->HandleMessage(message, wparam, lparam);
 }
 
-LRESULT CALLBACK BrowserWindow::AddressProc(HWND hwnd, UINT message,
-                                              WPARAM wparam, LPARAM lparam) {
-    auto* instance = reinterpret_cast<BrowserWindow*>(
-        GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    if (!instance || !instance->oldAddressProc_) {
-        return DefWindowProcW(hwnd, message, wparam, lparam);
-    }
+LRESULT CALLBACK BrowserWindow::AddressSubclass(HWND hwnd, UINT message,
+        WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR context) {
+    (void)id;
+    auto* instance = reinterpret_cast<BrowserWindow*>(context);
     if (message == WM_KEYDOWN && wparam == VK_RETURN) {
         PostMessageW(instance->hwnd_, WM_COMMAND, MAKEWPARAM(kGo, BN_CLICKED), 0);
         return 0;
@@ -135,7 +133,7 @@ LRESULT CALLBACK BrowserWindow::AddressProc(HWND hwnd, UINT message,
         SetWindowTextW(hwnd, instance->currentUrl_.c_str());
         return 0;
     }
-    return CallWindowProcW(instance->oldAddressProc_, hwnd, message, wparam, lparam);
+    return DefSubclassProc(hwnd, message, wparam, lparam);
 }
 
 void BrowserWindow::OnCreate() {
@@ -165,9 +163,10 @@ void BrowserWindow::OnCreate() {
         0, 0, 100, 26, hwnd_, nullptr, instance, nullptr);
     SetControlFont(status_);
 
-    SetWindowLongPtrW(address_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
-    oldAddressProc_ = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
-        address_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&BrowserWindow::AddressProc)));
+    if (!SetWindowSubclass(address_, &BrowserWindow::AddressSubclass,
+                           1, reinterpret_cast<DWORD_PTR>(this))) {
+        TraceBoot("OnCreate: address bar subclass failed");
+    }
     RECT client{};
     GetClientRect(hwnd_, &client);
     Resize(client.right, client.bottom);
