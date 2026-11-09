@@ -3,6 +3,8 @@
 #include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
+#include <objidl.h>
+#include <propidl.h>
 #include <gdiplus.h>
 #include <string>
 

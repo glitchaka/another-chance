@@ -1,4 +1,6 @@
 #include "window/Chrome.h"
+#include <objidl.h>
+#include <propidl.h>
 #include <gdiplus.h>
 #include <algorithm>
 #include <array>
