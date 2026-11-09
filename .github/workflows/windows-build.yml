@@ -22,5 +22,5 @@ jobs:
           name: AnotherChance-Windows-x64
           path: |
             build/Release/AnotherChance.exe
-            build/Release/AnotherChance-actual.bmp
+            build/AnotherChance-actual.bmp
           if-no-files-found: error
