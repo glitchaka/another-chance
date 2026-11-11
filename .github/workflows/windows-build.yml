@@ -23,6 +23,7 @@ jobs:
           path: |
             build/Release/AnotherChance.exe
             build/AnotherChance-actual.bmp
+            build/AnotherChance-tabbed-ui.bmp
             build/AnotherChance-JS-fallback.bmp
             build/AnotherChance-scripted-dom.bmp
             build/AnotherChance-external-dom.bmp

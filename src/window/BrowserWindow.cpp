@@ -469,7 +469,7 @@ void BrowserWindow::OpenMenu() {
                     MF_CHECKED : 0), kSearchBing, L"Buscador: Bing");
     AppendMenuW(menu, MF_STRING | (searchProvider_ == url::SearchProvider::Disabled ?
                     MF_CHECKED : 0), kSearchDisabled, L"Desactivar búsqueda");
-    POINT point{clientWidth_ - 171, kToolbarHeight - 2};
+    POINT point{clientWidth_ - 49, kToolbarHeight - 2};
     ClientToScreen(hwnd_, &point);
     TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
                    point.x, point.y, 0, hwnd_, nullptr);
@@ -488,7 +488,7 @@ void BrowserWindow::OpenTabMenu() {
         AppendMenuW(menu, MF_STRING | (i == activeTab_ ? MF_CHECKED : 0),
                     static_cast<UINT>(kSelectTabBase + i), caption.c_str());
     }
-    POINT pt{clientWidth_ - 269, kToolbarHeight - 1};
+    POINT pt{clientWidth_ - 150, kToolbarHeight - 1};
     ClientToScreen(hwnd_, &pt);
     TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
                    pt.x, pt.y, 0, hwnd_, nullptr);
@@ -592,10 +592,10 @@ void BrowserWindow::Resize(int width, int height) {
     clientHeight_ = std::max(1, height);
     const auto geometry = chrome::Measure(clientWidth_);
     if (address_) {
-        MoveWindow(address_, geometry.address.left + 11, 14,
+        MoveWindow(address_, geometry.address.left + 11, geometry.address.top + 3,
                    std::max(70, static_cast<int>(geometry.address.right -
                                                 geometry.address.left - 22)),
-                   27, TRUE);
+                   26, TRUE);
     }
     if (status_) {
         MoveWindow(status_, 15, std::max(kToolbarHeight, clientHeight_ - kStatusHeight + 5),
@@ -812,7 +812,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 if (top) return HTTOP;
                 if (bottom) return HTBOTTOM;
             }
-            if (chrome::IsDraggable(x, y, clientWidth_)) return HTCAPTION;
+            if (chrome::IsDraggable(x, y, clientWidth_, tabs_.size())) return HTCAPTION;
             return HTCLIENT;
         }
         case WM_NCLBUTTONDBLCLK:
@@ -916,8 +916,11 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             const int x = GET_X_LPARAM(lparam);
             const int y = GET_Y_LPARAM(lparam);
             if (y < kToolbarHeight) {
-                const auto hit = chrome::HitTest(x, y, clientWidth_);
+                const auto hit = chrome::HitTest(x, y, clientWidth_, tabs_.size());
                 switch (hit.action) {
+                    case chrome::Action::TabSelect: SwitchTab(hit.index); break;
+                    case chrome::Action::TabClose: CloseTab(hit.index); break;
+                    case chrome::Action::NewTab: OpenTab(); break;
                     case chrome::Action::Back: GoBack(); break;
                     case chrome::Action::Forward: GoForward(); break;
                     case chrome::Action::Reload: Reload(); break;
@@ -946,7 +949,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 ScreenToClient(hwnd_, &point);
                 const RECT content = ContentRect();
                 if (point.y < kToolbarHeight && chrome::HitTest(
-                        point.x, point.y, clientWidth_).action !=
+                        point.x, point.y, clientWidth_, tabs_.size()).action !=
                         chrome::Action::None) {
                     SetCursor(LoadCursorW(nullptr, IDC_HAND));
                     return TRUE;

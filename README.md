@@ -102,3 +102,13 @@ cada archivo con WinHTTP, con un máximo de 256 KiB por recurso; se ejecutan en
 orden del documento las operaciones literales reconocidas por `ScriptRuntime`.
 No es ejecución ECMAScript general ni implica compatibilidad con aplicaciones
 web actuales basadas en grandes bundles JavaScript o con interacciones complejas.
+
+
+## Interfaz de pestañas (noviembre 2026)
+
+Se sustituyó la barra monolítica por dos filas compactas: una fila superior
+de 34 px con pestañas reales (título, selección, cerrar y nueva pestaña)
+y controles de ventana dibujados dentro de la aplicación; una fila de navegación
+de 42 px con Atrás / Adelante / Recargar, dirección y acciones de página.
+La fila superior permite arrastrar la ventana por las zonas libres.
+No se usan decoraciones del sistema, Chromium, GTK ni Qt.

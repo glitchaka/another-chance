@@ -1,14 +1,16 @@
 #pragma once
-
 #include <windows.h>
+#include <cstddef>
 #include <string>
 #include <vector>
-#include <cstddef>
 
 namespace ac::chrome {
 
-// One integrated workspace header: no Chromium-style tab strip or system caption.
-constexpr int kToolbarHeight = 56;
+// Two independently laid-out rows, not a tall single toolbar.
+// The top row holds actual tabs and native caption controls. The second row
+// holds navigation, address input and the page actions.
+constexpr int kTabRowHeight = 34;
+constexpr int kToolbarHeight = 76;
 constexpr int kStatusHeight = 23;
 constexpr WORD kTabCommandBase = 300;
 
@@ -18,13 +20,13 @@ struct Tab {
 };
 
 enum class Action {
-    None, Back, Forward, Reload, Home, Bookmark,
-    TabMenu, Menu, Minimize, Maximize, Close
+    None, Back, Forward, Reload, Home, Bookmark, NewTab,
+    TabSelect, TabClose, TabMenu, Menu, Minimize, Maximize, Close
 };
 struct Hit {
     Action action = Action::None;
+    size_t index = 0;
 };
-
 struct Geometry {
     RECT address{};
     RECT back{};
@@ -38,10 +40,11 @@ struct Geometry {
     RECT maximize{};
     RECT close{};
 };
-
 [[nodiscard]] Geometry Measure(int width);
-[[nodiscard]] Hit HitTest(int x, int y, int width);
-[[nodiscard]] bool IsDraggable(int x, int y, int width);
+[[nodiscard]] RECT TabBounds(int width, size_t count, size_t index);
+[[nodiscard]] RECT NewTabBounds(int width, size_t count);
+[[nodiscard]] Hit HitTest(int x, int y, int width, size_t tabCount);
+[[nodiscard]] bool IsDraggable(int x, int y, int width, size_t tabCount);
 void Draw(HDC dc, int width, int height, const std::vector<Tab>& tabs,
           size_t activeTab, bool canBack, bool canForward,
           bool bookmarked, bool loading, bool maximized);

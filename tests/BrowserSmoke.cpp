@@ -231,7 +231,7 @@ public:
     }
     void ClickLink() {
         // First inline link at document (22,18) + 59px toolbar.
-        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 84));
+        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 104));
     }
     void Back() {
         PostMessageW(window_, WM_COMMAND, MAKEWPARAM(101, BN_CLICKED), 0);
@@ -467,6 +467,7 @@ int wmain(int argc, wchar_t** argv) {
         if (statusLabel) GetWindowTextW(statusLabel, homeStatus, 256);
         Check(wcscmp(homeStatus, L"Listo") == 0,
               "Home tab still displays internal engine diagnostics");
+        CaptureScreenshot(browser.Window(), "AnotherChance-tabbed-ui.bmp");
         std::cout << "PASS: create and activate a new tab\n";
 
         PostMessageW(browser.Window(), WM_COMMAND, MAKEWPARAM(300, 0), 0);
