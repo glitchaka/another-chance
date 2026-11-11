@@ -160,7 +160,12 @@ void Draw(HDC dc,int width,int height,const std::vector<Tab>& tabs,
         GetModuleHandleW(nullptr), MAKEINTRESOURCEW(101),
         IMAGE_ICON, 28, 28, LR_SHARED));
     if (appIcon) {
-        DrawIconEx(dc, 12, 14, appIcon, 28, 28, 0, nullptr, DI_NORMAL);
+        // Keep icon rendering in GDI+; mixing DrawIconEx with an active
+        // GDI+ Graphics can cause the client-side icon to disappear.
+        Bitmap iconBitmap(appIcon);
+        if (iconBitmap.GetLastStatus() == Ok) {
+            g.DrawImage(&iconBitmap, 12, 14, 28, 28);
+        }
     }
     Text(g,L"Another Chance",RectF(48,11,121,34),12,kInk,true);
 
