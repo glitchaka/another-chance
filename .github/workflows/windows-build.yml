@@ -25,4 +25,5 @@ jobs:
             build/AnotherChance-actual.bmp
             build/AnotherChance-JS-fallback.bmp
             build/AnotherChance-scripted-dom.bmp
+            build/AnotherChance-external-dom.bmp
           if-no-files-found: error

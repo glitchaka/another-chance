@@ -93,3 +93,12 @@ Opera sobre el árbol HTML antes del layout y tiene límites de operaciones y by
 **No es un intérprete ECMAScript completo**: faltan ejecución de JS general,
 `fetch`, promesas, event loop, módulos, scripts externos y un DOM estándar.
 Por tanto, páginas modernas como Archive.org siguen sin compatibilidad completa.
+
+
+## Recursos JavaScript externos (primera etapa)
+
+`BrowserWindow` resuelve hasta cuatro etiquetas `script src` HTTP(S) y descarga
+cada archivo con WinHTTP, con un máximo de 256 KiB por recurso; se ejecutan en
+orden del documento las operaciones literales reconocidas por `ScriptRuntime`.
+No es ejecución ECMAScript general ni implica compatibilidad con aplicaciones
+web actuales basadas en grandes bundles JavaScript o con interacciones complejas.

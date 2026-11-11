@@ -121,6 +121,15 @@ private:
                            "'<h1>Contenido generado</h1>';"
                            "document.title='DOM activo';"
                            "</script></body></html>";
+                } else if (request.find("GET /external-dom ") != std::string::npos) {
+                    body = "<!doctype html><html><head><title>Externo</title></head>"
+                           "<body><main id='app'></main>"
+                           "<script src='/external.js'></script></body></html>";
+                } else if (request.find("GET /external.js ") != std::string::npos) {
+                    type = "text/javascript";
+                    body = "document.getElementById('app').innerHTML="
+                           "'<h1>Contenido externo</h1>';"
+                           "document.title='Externo ejecutado';";
                 } else if (request.find("GET /next ") != std::string::npos) {
                     ++nextRequests;
                     body = "<html><head><title>Destino de prueba</title></head><body><h1>Correcto</h1></body></html>";
@@ -491,6 +500,19 @@ int wmain(int argc, wchar_t** argv) {
             }, 14000), "Script-generated HTML did not reach the live renderer");
             CaptureScreenshot(scripted.Window(), "AnotherChance-scripted-dom.bmp");
             std::cout << "PASS: inline script generates visible native DOM\n";
+        }
+        {
+            BrowserProcess scripted(argv[1],
+                L"http://127.0.0.1:" + std::to_wstring(server.Port()) +
+                L"/external-dom");
+            Check(Until([&] {
+                return scripted.IsAlive() &&
+                       scripted.HasTitle(L"Externo ejecutado") &&
+                       scripted.HasHttp200() &&
+                       SendMessageW(scripted.Window(), WM_APP + 42, 0, 0) == 1;
+            }, 20000), "External JavaScript resource did not produce native DOM");
+            CaptureScreenshot(scripted.Window(), "AnotherChance-external-dom.bmp");
+            std::cout << "PASS: external script resource generated visible DOM\n";
         }
         return 0;
     } catch (const std::exception& error) {

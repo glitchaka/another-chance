@@ -1,4 +1,5 @@
 #include "script/ScriptRuntime.h"
+#include "util/Url.h"
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -108,15 +109,27 @@ void Insert(Document& d, Node& target, std::string_view text, bool replace, bool
         target.children.push_back(std::move(n));
     }
 }
-void CollectScripts(const Node& node, std::vector<std::string>& scripts, bool inert=false) {
+void CollectScripts(const Node& node, std::vector<std::string>& scripts,
+                    std::wstring_view baseUrl,
+                    const std::unordered_map<std::string,std::string>& external,
+                    bool inert=false) {
     if (node.type!=Node::Type::Element) return;
     if (node.tag=="template" || node.tag=="noscript") inert=true;
-    if (!inert && node.tag=="script" && node.Attribute("src").empty()) {
-        for (const auto& child: node.children)
-            if (child->type==Node::Type::Text && child->text.size() < 1024*1024)
-                scripts.push_back(child->text);
+    if (!inert && node.tag=="script") {
+        const auto source=node.Attribute("src");
+        if (!source.empty()) {
+            const auto url=ac::url::Resolve(baseUrl,ac::url::ToWide(source));
+            const auto found=external.find(ac::url::ToUtf8(url));
+            if (found!=external.end() && found->second.size()<1024*1024)
+                scripts.push_back(found->second);
+        } else {
+            for (const auto& child: node.children)
+                if (child->type==Node::Type::Text && child->text.size()<1024*1024)
+                    scripts.push_back(child->text);
+        }
     }
-    for (const auto& child: node.children) CollectScripts(*child,scripts,inert);
+    for (const auto& child: node.children)
+        CollectScripts(*child,scripts,baseUrl,external,inert);
 }
 bool ExecuteStatement(Document& d, std::string_view statement) {
     size_t i=0;
@@ -164,11 +177,12 @@ bool ExecuteStatement(Document& d, std::string_view statement) {
     return true;
 }
 } // namespace
-Execution ExecuteInline(html::Document& d) {
+Execution Execute(html::Document& d, std::wstring_view baseUrl,
+                  const std::unordered_map<std::string,std::string>& external) {
     Execution out{};
     if (!d.root) return out;
     std::vector<std::string> sources;
-    CollectScripts(*d.root,sources);
+    CollectScripts(*d.root,sources,baseUrl,external);
     for (const auto& code: sources) {
         ++out.scripts;
         bool handled=false;
@@ -182,5 +196,8 @@ Execution ExecuteInline(html::Document& d) {
         if (!handled) ++out.unsupported;
     }
     return out;
+}
+Execution ExecuteInline(html::Document& d) {
+    return Execute(d,L"",{});
 }
 } // namespace ac::script

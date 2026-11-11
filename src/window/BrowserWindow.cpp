@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <unordered_set>
+#include <unordered_map>
 #include <cstring>
 
 namespace ac {
@@ -54,6 +55,23 @@ void CollectImages(const ac::html::Node& node, const std::wstring& base,
     for (const auto& child : node.children) {
         CollectImages(*child, base, urls, known);
     }
+}
+
+void CollectScriptSources(const ac::html::Node& node, const std::wstring& base,
+                          std::vector<std::wstring>& sources,
+                          std::unordered_set<std::wstring>& known) {
+    // Restricted interpreter: cap external downloads to prevent unbounded waits.
+    if (sources.size() >= 4) return;
+    if (node.tag == "script") {
+        const auto src = node.Attribute("src");
+        if (!src.empty()) {
+            const auto url = ac::url::Resolve(base, ac::url::ToWide(src));
+            if (ac::url::IsWeb(url) && known.insert(url).second)
+                sources.push_back(url);
+        }
+    }
+    for (const auto& child : node.children)
+        CollectScriptSources(*child,base,sources,known);
 }
 
 std::string EscapeHtml(const std::string& input) {
@@ -247,7 +265,25 @@ void BrowserWindow::WorkerLoop() {
                     "<h1>Documento de texto</h1><p>" + EscapeHtml(response.body) + "</p>");
             } else {
                 result->document = html::Parse(response.body);
-                script::ExecuteInline(result->document);
+                std::vector<std::wstring> scriptUrls;
+                std::unordered_set<std::wstring> visited;
+                if (result->document.root) {
+                    CollectScriptSources(*result->document.root,response.url,
+                                         scriptUrls,visited);
+                }
+                // Classic <script src> is fetched as a resource, never as a
+                // browser engine. Only our explicitly supported DOM operations
+                // are run; full ECMAScript remains unimplemented.
+                std::unordered_map<std::string,std::string> scriptBodies;
+                for (const auto& scriptUrl : scriptUrls) {
+                    if (job->generation != newestRequest_.load()) break;
+                    const auto jsResponse = http.Get(scriptUrl,256*1024);
+                    if (jsResponse.Ok() && jsResponse.status < 400 &&
+                        !jsResponse.body.empty()) {
+                        scriptBodies.emplace(url::ToUtf8(scriptUrl),jsResponse.body);
+                    }
+                }
+                script::Execute(result->document,response.url,scriptBodies);
             }
         } else {
             result->document = html::Parse(

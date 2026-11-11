@@ -1,5 +1,6 @@
 #include "html/HtmlParser.h"
 #include "script/ScriptRuntime.h"
+#include <unordered_map>
 #include "style/Style.h"
 #include "util/Url.h"
 #include "tech/IdScreenRect.h"
@@ -313,6 +314,20 @@ void TestScriptDom() {
           "unsupported JavaScript is reported, not silently claimed supported");
     layout.Reflow(dc,unsupported,sheet,images,L"https://example.org/",480);
     Check(!layout.HasVisibleContent(),"unsupported JS cannot fabricate content");
+    auto external = ac::html::Parse(
+        "<html><body><div id='root'></div>"
+        "<script src='/bundle.js'></script></body></html>");
+    const std::unordered_map<std::string,std::string> bundles{
+        {"https://example.org/bundle.js",
+         "document.getElementById('root').innerHTML='<p>Externo</p>';"
+         "document.title='Script externo';"}
+    };
+    const auto extResult=ac::script::Execute(external,L"https://example.org/",bundles);
+    Check(extResult.operations==2 && extResult.unsupported==0,
+          "external script native DOM operations");
+    Check(external.title=="Script externo", "external script title updated");
+    layout.Reflow(dc,external,sheet,images,L"https://example.org/",480);
+    Check(layout.HasVisibleContent(),"external script produces visible content");
     DeleteDC(dc);
 }
 
