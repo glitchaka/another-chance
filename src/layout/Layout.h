@@ -28,7 +28,7 @@ public:
 
 private:
     struct Item {
-        enum class Kind { Text, Rule, Image };
+        enum class Kind { Text, Rule, Image, Background };
         Kind kind = Kind::Text;
         RECT rect{};
         std::wstring text;

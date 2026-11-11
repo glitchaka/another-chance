@@ -238,16 +238,76 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         return;
     }
 
-    if (computed.block) BeginBlock(computed);
-    if (IsList(tag)) ++listDepth_;
-    if (tag == "li") {
-        AppendText(dc, L"\u2022 ", computed, link);
+    if (computed.block) {
+        if (x_ > left_ + listDepth_ * 22) NewLine();
+
+        const int oldLeft = left_;
+        const int oldRight = right_;
+        const int usableLeft = left_ + listDepth_ * 22;
+        const int usableWidth = std::max(1, right_ - usableLeft);
+        const int marginL = std::max(0, computed.marginLeft);
+        const int marginR = std::max(0, computed.marginRight);
+        const int paddingL = computed.paddingLeft;
+        const int paddingR = computed.paddingRight;
+        const int paddingH = paddingL + paddingR;
+        int contentWidth = std::max(1, usableWidth - marginL - marginR - paddingH);
+        if (computed.widthPixels >= 0)
+            contentWidth = std::min(contentWidth, computed.widthPixels);
+        else if (computed.widthPercent >= 0)
+            contentWidth = std::max(1, (usableWidth - paddingH) *
+                               computed.widthPercent / 100);
+        if (computed.maxWidthPixels >= 0)
+            contentWidth = std::min(contentWidth, computed.maxWidthPixels);
+        contentWidth = std::max(1, std::min(contentWidth, usableWidth));
+        const int boxWidth = contentWidth + paddingH;
+        const int freeRoom = std::max(0, usableWidth - marginL - marginR - boxWidth);
+        int boxLeft = usableLeft + marginL;
+        if (computed.marginLeft < 0 && computed.marginRight < 0)
+            boxLeft += freeRoom / 2;
+        else if (computed.marginLeft < 0)
+            boxLeft += freeRoom;
+        const int boxRight = boxLeft + boxWidth;
+
+        y_ += computed.marginTop;
+        const int boxTop = y_;
+        const size_t backgroundIndex = items_.size();
+        if (computed.background != CLR_INVALID) {
+            Item background;
+            background.kind = Item::Kind::Background;
+            background.color = computed.background;
+            items_.push_back(std::move(background));
+        }
+
+        left_ = boxLeft + paddingL;
+        right_ = std::max(left_ + 1, boxRight - paddingR);
+        x_ = left_;
+        y_ += computed.paddingTop;
+        lineBegin_ = items_.size();
+        lineAlign_ = style::TextAlign::Left;
+
+        const bool list = IsList(tag);
+        if (list) ++listDepth_;
+        if (tag == "li") AppendText(dc, L"\u2022 ", computed, link);
+        for (const auto& child : node.children) Walk(dc, *child, computed, link);
+        if (list) listDepth_ = std::max(0, listDepth_ - 1);
+
+        if (x_ > left_ + listDepth_ * 22) NewLine();
+        AlignLine();
+        y_ = std::max(y_ + computed.paddingBottom,
+                      boxTop + computed.minHeightPixels);
+        if (computed.background != CLR_INVALID)
+            items_[backgroundIndex].rect = {boxLeft, boxTop, boxRight, y_};
+        y_ += computed.marginBottom;
+
+        left_ = oldLeft;
+        right_ = oldRight;
+        x_ = left_ + listDepth_ * 22;
+        lineBegin_ = items_.size();
+        lineHeight_ = 24;
+        lineAlign_ = style::TextAlign::Left;
+    } else {
+        for (const auto& child : node.children) Walk(dc, *child, computed, link);
     }
-    for (const auto& child : node.children) Walk(dc, *child, computed, link);
-    if (IsList(tag)) {
-        listDepth_ = std::max(0, listDepth_ - 1);
-    }
-    if (computed.block) EndBlock(computed);
 }
 
 void PageLayout::Reflow(HDC dc, const html::Document& document,
@@ -297,7 +357,12 @@ void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
             item.rect.left, y, item.rect.right, bottom);
         bounds.Intersect(visible);
         if (bounds.IsEmpty()) continue;
-        if (item.kind == Item::Kind::Image) {
+        if (item.kind == Item::Kind::Background) {
+            RECT fill{item.rect.left, y, item.rect.right, bottom};
+            HBRUSH brush = CreateSolidBrush(item.color);
+            FillRect(dc, &fill, brush);
+            DeleteObject(brush);
+        } else if (item.kind == Item::Kind::Image) {
             const auto* bitmap = images_ ? images_->Find(item.imageUrl) : nullptr;
             if (!bitmap) continue;
             HDC memory = CreateCompatibleDC(dc);

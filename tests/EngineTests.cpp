@@ -204,6 +204,23 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, noScript, sheet, images, url, 400);
     Check(layout.HasVisibleContent(),
           "noscript content must appear when JS is not supported");
+    auto centeredBox = ac::html::Parse(
+        "<main style='max-width:160px;margin:0 auto;padding:10px'>"
+        "<a href='/box'>centrado</a></main>");
+    layout.Reflow(dc, centeredBox, sheet, images, url, 400);
+    Check(layout.LinkAt(112, 32, 0, 0) == L"https://example.org/box",
+          "link inside max-width centered box is correctly positioned");
+    Check(layout.LinkAt(25, 32, 0, 0).empty(),
+          "centered box no longer occupies the full left viewport");
+
+    auto empty = ac::html::Parse("<div></div>");
+    layout.Reflow(dc, empty, sheet, images, url, 400);
+    const int noPadding = layout.Height();
+    auto padded = ac::html::Parse(
+        "<div style='padding:20px 12px;min-height:90px'></div>");
+    layout.Reflow(dc, padded, sheet, images, url, 400);
+    Check(layout.Height() >= noPadding + 60,
+          "block min-height and padding affect layout geometry");
     DeleteDC(dc);
 }
 
