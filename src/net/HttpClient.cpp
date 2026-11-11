@@ -5,6 +5,7 @@
 #include <array>
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace ac::net {
 namespace {
@@ -31,6 +32,22 @@ std::wstring QueryStringHeader(HINTERNET request, DWORD flag) {
     return data.data();
 }
 } // namespace
+
+struct HttpClient::State {
+    HINTERNET session = nullptr;
+    State() {
+        session = WinHttpOpen(
+            L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AnotherChance/0.2",
+            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        if (session) WinHttpSetTimeouts(session,5000,5000,8000,10000);
+    }
+    ~State() {
+        if (session) WinHttpCloseHandle(session);
+    }
+};
+HttpClient::HttpClient() : state_(std::make_unique<State>()) {}
+HttpClient::~HttpClient() = default;
 
 Response HttpClient::Get(const std::wstring& url, size_t maxBytes) const {
     return Request(url,L"GET",{},maxBytes);
@@ -82,17 +99,15 @@ Response HttpClient::Request(const std::wstring& url,
         path.append(components.lpszExtraInfo, components.dwExtraInfoLength);
     }
 
-    InternetHandle session(WinHttpOpen(
-        L"AnotherChance/0.1 (Windows; motor original)",
-        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
-    if (!session.handle) {
+    // A WinHTTP session owns the automatic per-session cookie jar.
+    // Reusing one session for the worker preserves login/session cookies
+    // between document navigation, scripts, images and stylesheets.
+    if (!state_ || !state_->session) {
         response.error = ErrorCode(L"No se pudo abrir WinHTTP");
         return response;
     }
-    WinHttpSetTimeouts(session, 5000, 5000, 8000, 10000);
 
-    InternetHandle connection(WinHttpConnect(session, host.c_str(),
+    InternetHandle connection(WinHttpConnect(state_->session, host.c_str(),
         components.nPort, 0));
     if (!connection.handle) {
         response.error = ErrorCode(L"No se pudo conectar");

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <memory>
 #include <string>
 
 namespace ac::net {
@@ -14,12 +15,18 @@ struct Response {
 
 class HttpClient {
 public:
+    HttpClient();
+    ~HttpClient();
+    HttpClient(const HttpClient&) = delete;
+    HttpClient& operator=(const HttpClient&) = delete;
     [[nodiscard]] Response Get(const std::wstring& url,
                                size_t maxBytes = 8 * 1024 * 1024) const;
     [[nodiscard]] Response Post(const std::wstring& url,
                                 const std::string& urlEncodedBody,
                                 size_t maxBytes = 8 * 1024 * 1024) const;
 private:
+    struct State;
+    std::unique_ptr<State> state_;
     [[nodiscard]] Response Request(const std::wstring& url,
                                    const wchar_t* method,
                                    const std::string& urlEncodedBody,

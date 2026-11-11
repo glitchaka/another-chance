@@ -123,7 +123,15 @@ private:
                 }
                 std::string body;
                 std::string type = "text/html; charset=utf-8";
-                if (request.find("GET /start ") != std::string::npos) {
+                std::string extraHeaders;
+                if (request.find("GET /cookie-start ") != std::string::npos) {
+                    extraHeaders = "Set-Cookie: ac_test=kept; Path=/; HttpOnly\r\n";
+                    body = "<html><body>cookie established</body></html>";
+                } else if (request.find("GET /cookie-check ") != std::string::npos) {
+                    body = request.find("ac_test=kept")!=std::string::npos ?
+                        "<html><body>cookie preserved</body></html>" :
+                        "<html><body>cookie missing</body></html>";
+                } else if (request.find("GET /start ") != std::string::npos) {
                     ++htmlRequests;
                     body = R"(<!doctype html><html><head><title>Inicio de prueba</title><link rel="stylesheet" href="/style.css"></head><body><a href="/next">Siguiente</a><img src="/pixel.bmp" alt="rojo">)";
                     for (int i=0; i<45; ++i) {
@@ -192,7 +200,8 @@ private:
                 }
                 std::string response =
                     "HTTP/1.1 200 OK\r\nContent-Type: " + type +
-                    "\r\nContent-Length: " + std::to_string(body.size()) +
+                    "\r\n" + extraHeaders +
+                    "Content-Length: " + std::to_string(body.size()) +
                     "\r\nConnection: close\r\n\r\n" + body;
                 size_t offset = 0;
                 while (offset < response.size()) {
@@ -467,6 +476,17 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
         LocalServer server;
+        {
+            ac::net::HttpClient client;
+            const std::wstring base=L"http://127.0.0.1:"+
+                std::to_wstring(server.Port());
+            const auto establish=client.Get(base+L"/cookie-start");
+            const auto check=client.Get(base+L"/cookie-check");
+            Check(establish.Ok() && check.Ok() &&
+                  check.body.find("cookie preserved")!=std::string::npos,
+                  "WinHTTP session cookies were lost between navigation requests");
+            std::cout<<"PASS: automatic cookies preserved within HTTP session\n";
+        }
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
         {
