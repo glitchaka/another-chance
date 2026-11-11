@@ -125,3 +125,8 @@ solo cuando superan esa validación. Las capturas de diagnóstico se conservan
 también ante un fallo. La prueba requiere acceso a Internet desde el runner
 de Windows; un bloqueo externo debe investigarse antes de declarar
 compatibilidad, y nunca debe convertirse en un falso resultado positivo.
+
+
+## Controles HTML representados en el layout
+
+El layout crea una lista separada de ubicaciones de controles `<input>`, `<textarea>`, `<button>` y `<select>`; no vuelve a sustituirlos por textos entre corchetes. El administrador nativo `src/forms` se encarga de representar esos controles y conservar sus valores al cambiar el ancho o desplazar el documento. Las entradas ocultas siguen fuera de pantalla.

@@ -26,6 +26,17 @@ public:
     [[nodiscard]] int Height() const { return height_; }
     [[nodiscard]] bool HasVisibleContent() const;
 
+    struct Control {
+        enum class Kind { Text, Password, Textarea, Checkbox, Radio,
+                          Submit, Button, Reset, Select };
+        const html::Node* node = nullptr;
+        RECT rect{};
+        Kind kind = Kind::Text;
+    };
+    [[nodiscard]] const std::vector<Control>& Controls() const {
+        return controls_;
+    }
+
 private:
     struct Item {
         enum class Kind { Text, Rule, Image, Background };
@@ -41,6 +52,7 @@ private:
         bool underline = false;
     };
     std::vector<Item> items_;
+    std::vector<Control> controls_;
     std::map<std::tuple<int,bool,bool,bool>, HFONT> fonts_;
     const style::Sheet* sheet_ = nullptr;
     const image::Store* images_ = nullptr;

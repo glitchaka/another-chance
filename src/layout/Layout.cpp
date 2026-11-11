@@ -212,29 +212,62 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         lineHeight_ = 24;
         return;
     }
-    if (tag == "input") {
-        const auto type = node.Attribute("type");
-        if (type == "hidden" || node.attributes.contains("hidden")) return;
-        // Placeholders are non-interactive until native form widgets exist.
-        // Never show the internal value of a password or hidden control.
-        if (type == "submit" || type == "button" || type == "reset") {
-            const auto label = node.Attribute("value");
-            AppendText(dc, L"[ " + ac::url::ToWide(
-                label.empty() ? "Enviar" : label) + L" ]", computed, link);
-        } else if (type == "checkbox" || type == "radio") {
-            AppendText(dc, type == "checkbox" ? L"□ " : L"○ ", computed, link);
+    if (tag == "input" || tag == "textarea" || tag == "button" ||
+        tag == "select") {
+        const std::string type = node.Attribute("type");
+        if (type == "hidden" || node.attributes.contains("hidden") ||
+            node.attributes.contains("disabled")) return;
+
+        Control control{};
+        control.node = &node;
+        if (tag == "textarea") control.kind = Control::Kind::Textarea;
+        else if (tag == "select") control.kind = Control::Kind::Select;
+        else if (tag == "button") {
+            control.kind = type == "reset" ? Control::Kind::Reset :
+                           type == "button" ? Control::Kind::Button :
+                           Control::Kind::Submit;
+        } else if (type == "submit" || type == "image") {
+            control.kind = Control::Kind::Submit;
+        } else if (type == "button") {
+            control.kind = Control::Kind::Button;
+        } else if (type == "reset") {
+            control.kind = Control::Kind::Reset;
         } else if (type == "password") {
-            AppendText(dc, L"[ Contraseña ]", computed, link);
-        } else if (type == "text" || type == "search" || type == "email" ||
-                   type == "url" || type == "tel" || type.empty()) {
-            const auto label = node.Attribute("placeholder");
-            AppendText(dc, L"[ " + ac::url::ToWide(
-                label.empty() ? "Campo de texto" : label) + L" ]", computed, link);
+            control.kind = Control::Kind::Password;
+        } else if (type == "checkbox") {
+            control.kind = Control::Kind::Checkbox;
+        } else if (type == "radio") {
+            control.kind = Control::Kind::Radio;
+        } else {
+            control.kind = Control::Kind::Text;
         }
-        return;
-    }
-    if (tag == "textarea") {
-        AppendText(dc, L"[ Área de texto ]", computed, link);
+
+        const bool small = control.kind == Control::Kind::Checkbox ||
+                           control.kind == Control::Kind::Radio;
+        const bool button = control.kind == Control::Kind::Submit ||
+                            control.kind == Control::Kind::Button ||
+                            control.kind == Control::Kind::Reset;
+        int width = small ? 26 : button ? 96 : 
+                    control.kind == Control::Kind::Textarea ? 320 : 230;
+        const std::string widthAttr = node.Attribute("size");
+        if (!widthAttr.empty() && !small && !button) {
+            const long chars = std::strtol(widthAttr.c_str(), nullptr, 10);
+            if (chars > 0) width = static_cast<int>(std::clamp(chars, 4L, 80L)) * 9 + 20;
+        }
+        if (computed.widthPixels > 0) width = computed.widthPixels;
+        else if (computed.widthPercent > 0)
+            width = std::max(55, (right_-left_) * computed.widthPercent / 100);
+        width = std::clamp(width, small ? 24 : 50, std::max(50,right_-left_));
+        const int height = control.kind == Control::Kind::Textarea ? 84 :
+                           control.kind == Control::Kind::Select ? 32 : 30;
+        if (x_ + width > right_ && x_ > left_) NewLine();
+        const int available = std::max(1,right_-x_);
+        width = std::min(width,available);
+        control.rect = {x_,y_,x_+width,y_+height};
+        controls_.push_back(control);
+        x_ += width + (small ? 3 : 9);
+        lineHeight_ = std::max(lineHeight_,height+8);
+        if (control.kind == Control::Kind::Textarea) NewLine();
         return;
     }
 
@@ -363,6 +396,7 @@ void PageLayout::Reflow(HDC dc, const html::Document& document,
                         const style::Sheet& sheet, const image::Store& images,
                         const std::wstring& pageUrl, int viewportWidth) {
     items_.clear();
+    controls_.clear();
     sheet_ = &sheet;
     images_ = &images;
     pageUrl_ = pageUrl;
@@ -381,6 +415,7 @@ void PageLayout::Reflow(HDC dc, const html::Document& document,
 }
 
 bool PageLayout::HasVisibleContent() const {
+    if (!controls_.empty()) return true;
     for (const Item& item : items_) {
         if (item.kind == Item::Kind::Image ||
             item.kind == Item::Kind::Rule ||
