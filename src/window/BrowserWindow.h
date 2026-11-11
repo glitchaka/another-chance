@@ -6,6 +6,7 @@
 #include "layout/Layout.h"
 #include "image/ImageStore.h"
 #include "window/Chrome.h"
+#include "util/Url.h"
 #include <unordered_set>
 #include <windows.h>
 #include <condition_variable>
@@ -31,6 +32,9 @@ public:
     static constexpr WORD kBookmark = 108;
     static constexpr WORD kHome = 109;
     static constexpr WORD kSelectTabBase = chrome::kTabCommandBase;
+    static constexpr WORD kSearchGoogle = 120;
+    static constexpr WORD kSearchBing = 121;
+    static constexpr WORD kSearchDisabled = 122;
     static HWND Create(HINSTANCE instance, std::wstring initialUrl = {});
 
 private:
@@ -88,6 +92,7 @@ private:
 
     std::wstring currentUrl_;
     std::wstring initialUrl_;
+    url::SearchProvider searchProvider_ = url::SearchProvider::Google;
     std::unique_ptr<html::Document> document_;
     style::Sheet sheet_;
     layout::PageLayout layout_;

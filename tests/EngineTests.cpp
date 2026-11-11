@@ -164,6 +164,26 @@ void TestLayoutGeometry() {
 void TestUrls() {
     Check(ac::url::Normalize(L"example.org") == L"https://example.org",
           "address normalization");
+    Check(ac::url::Normalize(L"EXAMPLE.org/path") == L"https://EXAMPLE.org/path",
+          "bare domain with path");
+    Check(ac::url::Normalize(L"localhost:8080/start") ==
+          L"http://localhost:8080/start", "local server address");
+    Check(ac::url::Normalize(L"127.0.0.1:53997/start") ==
+          L"http://127.0.0.1:53997/start", "local IPv4 address");
+    Check(ac::url::Normalize(L"HTTPS://example.org/hello") ==
+          L"https://example.org/hello", "case-insensitive HTTPS scheme");
+    Check(ac::url::Normalize(L"example.org:70000").empty(),
+          "reject invalid TCP port");
+    Check(ac::url::ResolveInput(L"example.org", ac::url::SearchProvider::Google) ==
+          L"https://example.org", "address input takes priority over search");
+    Check(ac::url::ResolveInput(L"google", ac::url::SearchProvider::Google) ==
+          L"https://www.google.com/search?q=google", "bare search term uses provider");
+    Check(ac::url::ResolveInput(L"gatos negros", ac::url::SearchProvider::Bing) ==
+          L"https://www.bing.com/search?q=gatos+negros", "multiword search");
+    Check(ac::url::ResolveInput(L"gatos negros", ac::url::SearchProvider::Disabled).empty(),
+          "disabled search never redirects");
+    Check(ac::url::ResolveInput(L"file://documents", ac::url::SearchProvider::Google).empty(),
+          "unsupported URI scheme is never sent to search");
     Check(ac::url::Normalize(L"mi búsqueda") == L"",
           "search text is not redirected to an external provider");
     Check(ac::url::Normalize(L"palabra") == L"",

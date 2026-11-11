@@ -65,3 +65,10 @@ La rueda del ratón invalida exclusivamente el rectángulo del documento y conse
 ## Referencias de estilo verificadas
 
 Se revisaron las fuentes de KDE Breeze (`kdecoration/breeze.h`), GNOME libadwaita (`src/stylesheet/widgets/_header-bar.scss`) y Linux Mint Mint-Y (`src/Mint-Y/gtk-3.0/gtk.css`). El encabezado propietario de Another Chance se redujo de 78 a 56 píxeles, eliminó el símbolo decorativo dentro de la barra de dirección, el monograma grande y los botones coloreados, y emplea márgenes compactos y colores neutros. Son referencias de diseño, no dependencias ni código copiado de dichos proyectos.
+
+
+## Resolución de la barra de direcciones
+
+Se distingue entre una dirección y una búsqueda, sin incorporar motores de otros navegadores.
+Las direcciones `https://sitio.cl`, `sitio.cl`, `sitio.cl/ruta`, `localhost:8080` y `127.0.0.1:8080` se normalizan automáticamente (HTTPS por defecto para dominios; HTTP para la red local).
+Las palabras o frases sin dirección se envían al buscador configurado en el menú: Google (predeterminado), Bing o búsqueda desactivada. El servicio de búsqueda es externo y recibe los términos; **el motor de representación de páginas continúa siendo propio y experimental**, sin JavaScript ni compatibilidad CSS moderna. La selección del buscador no persiste tras cerrar.

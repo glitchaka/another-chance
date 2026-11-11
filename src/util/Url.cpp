@@ -195,8 +195,8 @@ std::wstring Normalize(std::wstring input) {
     if (!valid) return {};
     // Bare single-label names are ambiguous. Explicit http://intranet
     // remains valid, but "intranet" is a search term.
-    if (host != L"localhost" && host != L"[::1]" &&
-        host.find(L'.') == std::wstring::npos) return {};
+    if (!LocalAddress(host) && host.find(L'.') == std::wstring::npos)
+        return {};
 
     const std::wstring output =
         std::wstring(LocalAddress(host) ? L"http://" : L"https://") + input;

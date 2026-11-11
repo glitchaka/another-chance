@@ -429,6 +429,13 @@ void BrowserWindow::OpenMenu() {
     AppendMenuW(menu, MF_STRING, kHome, L"Página de inicio");
     AppendMenuW(menu, MF_STRING, kReload, L"Recargar\tF5");
     AppendMenuW(menu, MF_STRING, kBookmark, L"Guardar marcador");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING | (searchProvider_ == url::SearchProvider::Google ?
+                    MF_CHECKED : 0), kSearchGoogle, L"Buscador predeterminado: Google");
+    AppendMenuW(menu, MF_STRING | (searchProvider_ == url::SearchProvider::Bing ?
+                    MF_CHECKED : 0), kSearchBing, L"Buscador: Bing");
+    AppendMenuW(menu, MF_STRING | (searchProvider_ == url::SearchProvider::Disabled ?
+                    MF_CHECKED : 0), kSearchDisabled, L"Desactivar búsqueda");
     POINT point{clientWidth_ - 171, kToolbarHeight - 2};
     ClientToScreen(hwnd_, &point);
     TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
@@ -465,16 +472,15 @@ void BrowserWindow::SetStatus(const std::wstring& message) {
 }
 
 void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
-    const std::string inputTrace = "Navigate: input length=" + std::to_string(address.size()) +
-        " value=" + url::ToUtf8(address);
-    TraceBoot(inputTrace.c_str());
-    address = url::Normalize(std::move(address));
-    const std::string normalizedTrace = "Navigate: normalized length=" +
-        std::to_string(address.size()) + " value=" + url::ToUtf8(address);
-    TraceBoot(normalizedTrace.c_str());
+    const std::wstring typed = address;
+    address = url::ResolveInput(std::move(address), searchProvider_);
     if (address.empty()) {
-        SetStatus(L"Introduce una URL HTTP/HTTPS. La búsqueda web todavía no está implementada.");
+        SetStatus(L"No se reconoce la dirección. Introduce una URL o selecciona un buscador.");
         return;
+    }
+    // Show where a search will be sent; the rendering engine is still our own.
+    if (recordHistory && url::Normalize(typed).empty()) {
+        SetStatus(L"Búsqueda mediante el proveedor seleccionado...");
     }
     if (recordHistory) {
         if (!history_.empty()) {
@@ -799,6 +805,18 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 case kCloseTab: CloseTab(activeTab_); return 0;
                 case kBookmark: ToggleBookmark(); return 0;
                 case kHome: ShowHome(); return 0;
+                case kSearchGoogle:
+                    searchProvider_ = url::SearchProvider::Google;
+                    SetStatus(L"Buscador: Google");
+                    return 0;
+                case kSearchBing:
+                    searchProvider_ = url::SearchProvider::Bing;
+                    SetStatus(L"Buscador: Bing");
+                    return 0;
+                case kSearchDisabled:
+                    searchProvider_ = url::SearchProvider::Disabled;
+                    SetStatus(L"Búsqueda desactivada. Solo se aceptarán URLs.");
+                    return 0;
                 case kFocus:
                     SetFocus(address_);
                     SendMessageW(address_, EM_SETSEL, 0, -1);
