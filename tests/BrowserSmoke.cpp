@@ -101,7 +101,12 @@ private:
                 std::string type = "text/html; charset=utf-8";
                 if (request.find("GET /start ") != std::string::npos) {
                     ++htmlRequests;
-                    body = R"(<!doctype html><html><head><title>Inicio de prueba</title><link rel="stylesheet" href="/style.css"></head><body><a href="/next">Siguiente</a><img src="/pixel.bmp" alt="rojo"></body></html>)";
+                    body = R"(<!doctype html><html><head><title>Inicio de prueba</title><link rel="stylesheet" href="/style.css"></head><body><a href="/next">Siguiente</a><img src="/pixel.bmp" alt="rojo">)";
+                    for (int i=0; i<45; ++i) {
+                        body += "<p>Fila de prueba de desplazamiento " +
+                            std::to_string(i) + "</p>";
+                    }
+                    body += "</body></html>";
                 } else if (request.find("GET /next ") != std::string::npos) {
                     ++nextRequests;
                     body = "<html><head><title>Destino de prueba</title></head><body><h1>Correcto</h1></body></html>";
@@ -357,7 +362,33 @@ int wmain(int argc, wchar_t** argv) {
             server.imageRequests.load() > 0; }, 12000),
               "Page did not request external CSS and image");
         std::cout << "PASS: load external CSS and image resources\n";
+        Sleep(550);
         CaptureScreenshot(browser.Window());
+
+        // Scrolling must change the document but never trigger a header repaint.
+        RedrawWindow(browser.Window(), nullptr, nullptr, RDW_UPDATENOW);
+        constexpr UINT kCountHeaderPaints = WM_APP + 40;
+        constexpr UINT kGetScrollY = WM_APP + 41;
+        const LRESULT headerBefore = SendMessageW(
+            browser.Window(), kCountHeaderPaints, 0, 0);
+        const LRESULT scrollBefore = SendMessageW(
+            browser.Window(), kGetScrollY, 0, 0);
+        SendMessageW(browser.Window(), WM_MOUSEWHEEL,
+                     MAKEWPARAM(0, static_cast<WORD>(-WHEEL_DELTA)), 0);
+        RedrawWindow(browser.Window(), nullptr, nullptr, RDW_UPDATENOW);
+        const LRESULT headerAfter = SendMessageW(
+            browser.Window(), kCountHeaderPaints, 0, 0);
+        const LRESULT scrollAfter = SendMessageW(
+            browser.Window(), kGetScrollY, 0, 0);
+        Check(scrollAfter > scrollBefore, "Mouse wheel did not move the document");
+        Check(headerAfter == headerBefore,
+              "Mouse wheel unnecessarily repainted the browser header");
+        SendMessageW(browser.Window(), WM_MOUSEWHEEL,
+                     MAKEWPARAM(0, static_cast<WORD>(WHEEL_DELTA)), 0);
+        RedrawWindow(browser.Window(), nullptr, nullptr, RDW_UPDATENOW);
+        Check(SendMessageW(browser.Window(), kGetScrollY, 0, 0) == scrollBefore,
+              "Wheel-up did not restore scroll position");
+        std::cout << "PASS: wheel scrolls page without repainting header\n";
 
         browser.ClickLink();
         Check(Until([&] { return browser.IsAlive() &&

@@ -686,6 +686,7 @@ void BrowserWindow::Paint() {
         if (contentOnly) {
             DrawContent(buffer);
         } else {
+            ++chromePaintCount_;
             DrawClient(buffer);
         }
         SetViewportOrgEx(buffer, 0, 0, nullptr);
@@ -695,10 +696,12 @@ void BrowserWindow::Paint() {
     } else {
         // Graceful fallback if the offscreen surface could not be allocated.
         const RECT view = ContentRect();
-        if (dirty.top >= view.top && dirty.bottom <= view.bottom)
+        if (dirty.top >= view.top && dirty.bottom <= view.bottom) {
             DrawContent(target);
-        else
+        } else {
+            ++chromePaintCount_;
             DrawClient(target);
+        }
     }
     if (bitmap) DeleteObject(bitmap);
     if (buffer) DeleteDC(buffer);
@@ -755,6 +758,12 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
         case WM_SIZE:
             Resize(LOWORD(lparam), HIWORD(lparam));
             return 0;
+        // Internal-only diagnostics used by our Windows UI regression test.
+        // No user input or navigation data is exposed.
+        case WM_APP + 40:
+            return static_cast<LRESULT>(chromePaintCount_);
+        case WM_APP + 41:
+            return static_cast<LRESULT>(scrollY_);
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
