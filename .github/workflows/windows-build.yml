@@ -24,4 +24,5 @@ jobs:
             build/Release/AnotherChance.exe
             build/AnotherChance-actual.bmp
             build/AnotherChance-JS-fallback.bmp
+            build/AnotherChance-scripted-dom.bmp
           if-no-files-found: error
