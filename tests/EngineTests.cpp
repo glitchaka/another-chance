@@ -126,6 +126,20 @@ void TestStyles() {
     const auto inside = sheet.Compute(*child, metrics);
     Check(inside.widthPercent == 50 && inside.paddingLeft == 6 &&
           inside.maxWidthPixels == -1, "non inherited box metrics");
+    auto cards = ac::html::Parse(
+        "<nav style='display:flex;gap:12px'>"
+        "<div><a href='/left'>LEFTLINK</a></div>"
+        "<div><a href='/right'>RIGHTLINK</a></div></nav>");
+    const auto* nav = Find(*cards.root, "nav");
+    Check(nav != nullptr, "flex fixture exists");
+    const auto flexStyle = sheet.Compute(*nav, parent);
+    Check(flexStyle.layoutMode == ac::style::LayoutMode::FlexRow &&
+          flexStyle.gapPixels == 12, "flex layout and gap parsed");
+    ac::style::Sheet gridStyle;
+    gridStyle.Parse("nav {display:grid; grid-template-columns:repeat(3,1fr);}");
+    const auto grid = gridStyle.Compute(*nav, parent);
+    Check(grid.layoutMode == ac::style::LayoutMode::Grid &&
+          grid.gridColumns == 3, "grid track count parsed");
 
     auto nested = ac::html::Parse(
         "<main id='app'><div class='panel'><p class='title'>Hello</p></div></main>");
@@ -237,6 +251,15 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, padded, sheet, images, url, 400);
     Check(layout.Height() >= noPadding + 60,
           "block min-height and padding affect layout geometry");
+    auto flex = ac::html::Parse(
+        "<div style='display:flex;gap:12px'>"
+        "<div><a href='/a'>PRIMER</a></div>"
+        "<div><a href='/b'>SEGUNDO</a></div></div>");
+    layout.Reflow(dc, flex, sheet, images, url, 400);
+    Check(layout.LinkAt(28, 24, 0, 0) ==
+          L"https://example.org/a", "flex first column link");
+    Check(layout.LinkAt(213, 24, 0, 0) ==
+          L"https://example.org/b", "flex second column link");
     DeleteDC(dc);
 }
 

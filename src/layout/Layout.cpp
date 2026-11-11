@@ -288,7 +288,56 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         const bool list = IsList(tag);
         if (list) ++listDepth_;
         if (tag == "li") AppendText(dc, L"\u2022 ", computed, link);
-        for (const auto& child : node.children) Walk(dc, *child, computed, link);
+        if (computed.layoutMode == style::LayoutMode::FlexRow ||
+            computed.layoutMode == style::LayoutMode::Grid) {
+            std::vector<const html::Node*> children;
+            for (const auto& child : node.children) {
+                if (child->type == html::Node::Type::Text) {
+                    bool whitespace = true;
+                    for (unsigned char c : child->text)
+                        if (c > 32) { whitespace = false; break; }
+                    if (whitespace) continue;
+                }
+                children.push_back(child.get());
+            }
+            const int columns = computed.layoutMode == style::LayoutMode::Grid ?
+                computed.gridColumns :
+                std::max(1, static_cast<int>(children.size()));
+            const int cols = std::clamp(columns, 1, 12);
+            const int gap = std::max(0, computed.gapPixels);
+            const int parentLeft = left_;
+            const int parentRight = right_;
+            const int rowStart = y_;
+            int rowBottom = rowStart;
+            const int trackWidth = std::max(1,
+                (parentRight - parentLeft - gap * (cols - 1)) / cols);
+            for (size_t i = 0; i < children.size(); ++i) {
+                const int column = static_cast<int>(i % static_cast<size_t>(cols));
+                if (column == 0 && i != 0) {
+                    y_ = rowBottom + gap;
+                    rowBottom = y_;
+                }
+                const int cellLeft = parentLeft + column * (trackWidth + gap);
+                left_ = cellLeft;
+                right_ = std::min(parentRight, cellLeft + trackWidth);
+                x_ = left_;
+                lineBegin_ = items_.size();
+                lineAlign_ = style::TextAlign::Left;
+                const int originalY = y_;
+                Walk(dc, *children[i], computed, link);
+                if (x_ > left_) NewLine();
+                rowBottom = std::max(rowBottom, y_);
+                y_ = originalY;
+            }
+            y_ = rowBottom;
+            left_ = parentLeft;
+            right_ = parentRight;
+            x_ = left_;
+            lineBegin_ = items_.size();
+            lineHeight_ = 24;
+        } else {
+            for (const auto& child : node.children) Walk(dc, *child, computed, link);
+        }
         if (list) listDepth_ = std::max(0, listDepth_ - 1);
 
         if (x_ > left_ + listDepth_ * 22) NewLine();

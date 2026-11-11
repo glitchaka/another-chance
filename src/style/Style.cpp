@@ -211,8 +211,32 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
         style.underline = value.find("underline") != std::string::npos;
     } else if (key == "display") {
         if (value == "none") style.hidden = true;
-        else if (value == "block" || value == "flex" || value == "grid") style.block = true;
+        else if (value == "block") { style.block = true; style.layoutMode = LayoutMode::Flow; }
+        else if (value == "flex" || value == "inline-flex") {
+            style.block = true; style.layoutMode = LayoutMode::FlexRow;
+        } else if (value == "grid" || value == "inline-grid") {
+            style.block = true; style.layoutMode = LayoutMode::Grid;
+        }
         else if (value == "inline") style.block = false;
+    } else if (key == "flex-direction") {
+        if (value == "column" || value == "column-reverse")
+            style.layoutMode = LayoutMode::FlexColumn;
+        else if (value == "row" || value == "row-reverse")
+            style.layoutMode = LayoutMode::FlexRow;
+    } else if (key == "gap" || key == "column-gap" || key == "row-gap") {
+        style.gapPixels = CssPixels(value, 0);
+    } else if (key == "grid-template-columns") {
+        // Minimal equal-track grid support, including repeat(N, 1fr).
+        int columns = 0;
+        if (value.starts_with("repeat(")) {
+            const char* start = value.c_str() + 7;
+            columns = std::atoi(start);
+        } else {
+            std::istringstream stream(value);
+            std::string track;
+            while (stream >> track) ++columns;
+        }
+        style.gridColumns = std::clamp(columns, 1, 12);
     } else if (key == "visibility") {
         if (value == "hidden" || value == "collapse") style.hidden = true;
     } else if (key == "text-align") {
@@ -382,6 +406,9 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     result.widthPercent = -1;
     result.maxWidthPixels = -1;
     result.minHeightPixels = 0;
+    result.gapPixels = 0;
+    result.gridColumns = 2;
+    result.layoutMode = LayoutMode::Flow;
     result.background = CLR_INVALID;
     if (node.type != html::Node::Type::Element) return result;
     const auto& tag = node.tag;

@@ -8,6 +8,7 @@
 
 namespace ac::style {
 enum class TextAlign { Left, Center, Right };
+enum class LayoutMode { Flow, FlexRow, FlexColumn, Grid };
 struct Computed {
     COLORREF color = RGB(35, 40, 46);
     COLORREF background = CLR_INVALID;
@@ -25,6 +26,9 @@ struct Computed {
     int widthPercent = -1;
     int maxWidthPixels = -1;
     int minHeightPixels = 0;
+    int gapPixels = 0;
+    int gridColumns = 2;
+    LayoutMode layoutMode = LayoutMode::Flow;
     bool bold = false;
     bool italic = false;
     bool underline = false;
