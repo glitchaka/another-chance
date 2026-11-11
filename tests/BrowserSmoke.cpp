@@ -79,6 +79,7 @@ public:
     std::atomic<int> imageRequests{0};
     std::atomic<int> nextRequests{0};
     std::atomic<int> formRequests{0};
+    std::atomic<int> postRequests{0};
 
 private:
     SOCKET listener_ = INVALID_SOCKET;
@@ -99,6 +100,25 @@ private:
             int count = recv(client, buffer, static_cast<int>(sizeof(buffer)), 0);
             if (count > 0) {
                 std::string request(buffer, static_cast<size_t>(count));
+                // WinHTTP may send headers and POST data in separate reads.
+                // Read Content-Length rather than assuming recv() captured all.
+                const auto headEnd=request.find("\r\n\r\n");
+                const auto sizeAt=request.find("Content-Length:");
+                if (headEnd!=std::string::npos &&
+                    sizeAt!=std::string::npos && sizeAt<headEnd) {
+                    const size_t begin=sizeAt+15;
+                    const auto stop=request.find("\r\n",begin);
+                    const auto digits=request.substr(begin,stop-begin);
+                    const unsigned expected=static_cast<unsigned>(
+                        std::strtoul(digits.c_str(),nullptr,10));
+                    const size_t bodyStart=headEnd+4;
+                    while (request.size()-bodyStart<expected && request.size()<65536) {
+                        char more[4096];
+                        const int got=recv(client,more,sizeof(more),0);
+                        if (got<=0) break;
+                        request.append(more,static_cast<size_t>(got));
+                    }
+                }
                 std::string body;
                 std::string type = "text/html; charset=utf-8";
                 if (request.find("GET /start ") != std::string::npos) {
@@ -131,6 +151,18 @@ private:
                     body = "document.getElementById('app').innerHTML="
                            "'<h1>Contenido externo</h1>';"
                            "document.title='Externo ejecutado';";
+                } else if (request.find("GET /form-post ") != std::string::npos) {
+                    body = "<html><head><title>Formulario POST</title></head><body>"
+                           "<form action='/posted' method='post'>"
+                           "<input name='q' placeholder='Nombre'>"
+                           "<input type='hidden' name='lang' value='es'>"
+                           "<button type='submit'>Enviar</button>"
+                           "</form></body></html>";
+                } else if (request.find("POST /posted ") != std::string::npos) {
+                    const bool matched=request.find("q=prueba&lang=es")!=std::string::npos;
+                    if (matched) ++postRequests;
+                    body=matched ? "<html><title>POST recibido</title><body>OK</body></html>"
+                                 : "<html><title>POST incorrecto</title><body>Error</body></html>";
                 } else if (request.find("GET /form ") != std::string::npos) {
                     body = "<html><head><title>Formulario real</title></head><body>"
                            "<form action='/submitted' method='get'>"
@@ -654,6 +686,28 @@ int wmain(int argc, wchar_t** argv) {
             }
             Check(passed,"native form GET submission did not navigate");
             std::cout<<"PASS: native HTML input, button, hidden fields and GET submit\n";
+        }
+        {
+            BrowserProcess posted(argv[1],
+                L"http://127.0.0.1:"+std::to_wstring(server.Port())+L"/form-post");
+            Check(Until([&]{
+                return posted.IsAlive() &&
+                    posted.HasTitle(L"Formulario POST") &&
+                    SendMessageW(posted.Window(),WM_APP+45,0,0)==2;
+            },14000),"POST form did not instantiate its controls");
+            HWND field=FindWindowExW(posted.Window(),nullptr,L"Edit",nullptr);
+            field=FindWindowExW(posted.Window(),field,L"Edit",nullptr);
+            Check(field && IsWindowVisible(field),"POST form text input missing");
+            SendMessageW(field,WM_SETTEXT,0,reinterpret_cast<LPARAM>(L"prueba"));
+            HWND submit=FindWindowExW(posted.Window(),nullptr,L"Button",nullptr);
+            Check(submit!=nullptr,"POST submit button missing");
+            SendMessageW(submit,BM_CLICK,0,0);
+            Check(Until([&]{
+                return posted.IsAlive() &&
+                    posted.HasTitle(L"POST recibido") &&
+                    server.postRequests.load()>0;
+            },15000),"HTTP POST did not transport encoded fields");
+            std::cout<<"PASS: native HTML form encodes and submits POST body\n";
         }
         {
             BrowserProcess scripted(argv[1],
