@@ -169,6 +169,12 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, visible, sheet, images, url, 400);
     Check(layout.HasVisibleContent(),
           "visible HTML content must not be treated as blank");
+    auto noScript = ac::html::Parse(
+        "<html><body><noscript>Este sitio requiere JavaScript.</noscript>"
+        "</body></html>");
+    layout.Reflow(dc, noScript, sheet, images, url, 400);
+    Check(layout.HasVisibleContent(),
+          "noscript content must appear when JS is not supported");
     DeleteDC(dc);
 }
 

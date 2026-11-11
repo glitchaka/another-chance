@@ -296,7 +296,7 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     }
     if (tag == "head" || tag == "title" || tag == "script" ||
         tag == "style" || tag == "meta" || tag == "link" ||
-        tag == "noscript" || tag == "svg" || tag == "canvas" ||
+        tag == "svg" || tag == "canvas" ||
         tag == "template" || tag == "base" || tag == "source")
         result.hidden = true;
     if (tag == "a") {
