@@ -329,6 +329,7 @@ int wmain(int argc, wchar_t** argv) {
         LocalServer server;
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
+        {
         BrowserProcess browser(argv[1], page);
         Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
         const LONG_PTR style = GetWindowLongPtrW(browser.Window(), GWL_STYLE);
@@ -428,8 +429,15 @@ int wmain(int argc, wchar_t** argv) {
             server.htmlRequests.load() >= 3; }, 14000),
               "Switching back to first tab did not restore navigation");
         std::cout << "PASS: switch tab and restore previous URL\n";
-        // A second real GUI process opens a JS-only page: it must display
-        // an explicit unsupported-page status rather than silent white.
+        } // close the first GUI before launching the second test instance
+        BrowserProcess jsBrowser(argv[1],
+            L"http://127.0.0.1:" + std::to_wstring(server.Port()) + L"/js-only");
+        Check(Until([&] {
+            return jsBrowser.IsAlive() &&
+                   jsBrowser.HasTitle(L"Aplicación JS") &&
+                   jsBrowser.StatusContains(L"Sin contenido representable");
+        }, 12000), "JS-only site did not report unsupported blank page");
+        std::cout << "PASS: JS-only HTML reports visible unsupported-page state\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';

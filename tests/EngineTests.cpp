@@ -158,6 +158,17 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, withHidden, sheet, images, url, 400);
     Check(layout.Height() == visibleHeight,
           "hidden elements must not affect rendered height");
+    auto jsOnly = ac::html::Parse(
+        "<html><head><title>JS Only</title></head>"
+        "<body><div id='app'></div><script>window.render();</script></body></html>");
+    layout.Reflow(dc, jsOnly, sheet, images, url, 400);
+    Check(!layout.HasVisibleContent(),
+          "JS-only empty document must be detected");
+    auto visible = ac::html::Parse(
+        "<html><body><h1>Contenido visible</h1></body></html>");
+    layout.Reflow(dc, visible, sheet, images, url, 400);
+    Check(layout.HasVisibleContent(),
+          "visible HTML content must not be treated as blank");
     DeleteDC(dc);
 }
 
