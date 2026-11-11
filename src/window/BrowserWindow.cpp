@@ -1,5 +1,6 @@
 #include "window/BrowserWindow.h"
 #include "util/Url.h"
+#include "script/ScriptRuntime.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -246,6 +247,7 @@ void BrowserWindow::WorkerLoop() {
                     "<h1>Documento de texto</h1><p>" + EscapeHtml(response.body) + "</p>");
             } else {
                 result->document = html::Parse(response.body);
+                script::ExecuteInline(result->document);
             }
         } else {
             result->document = html::Parse(

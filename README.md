@@ -81,3 +81,15 @@ El ejecutable incorpora el recurso ICON (ID 101) en `assets/anotherchance.ico`, 
 ## Pantalla de inicio y cabecera
 
 La pantalla de inicio ya no muestra textos de demostración ni enlaces a páginas de prueba: abre un documento vacío, deja el foco en la barra de direcciones y permite navegar o buscar inmediatamente. La cabecera reserva el ancho necesario para escribir "Another Chance" sin truncarlo. El icono del encabezado se dibuja con el mismo recurso HICON del ejecutable, sin duplicar el diseño con trazos manuales.
+
+
+## ScriptRuntime (etapa limitada)
+
+Se añadió `src/script/` como módulo nativo independiente. Conserva el texto de scripts
+inline y permite operaciones de cadenas literales sobre `document.title`,
+`document.write`, `document.body.innerHTML/textContent`,
+`document.getElementById(...).innerHTML/textContent` y selectores por ID.
+Opera sobre el árbol HTML antes del layout y tiene límites de operaciones y bytes.
+**No es un intérprete ECMAScript completo**: faltan ejecución de JS general,
+`fetch`, promesas, event loop, módulos, scripts externos y un DOM estándar.
+Por tanto, páginas modernas como Archive.org siguen sin compatibilidad completa.

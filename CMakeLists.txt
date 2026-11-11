@@ -16,6 +16,7 @@ add_executable(AnotherChance WIN32
     src/net/HttpClient.cpp
     src/image/ImageStore.cpp
     src/html/HtmlParser.cpp
+    src/script/ScriptRuntime.cpp
     src/style/Style.cpp
     src/layout/Layout.cpp
     src/window/BrowserWindow.cpp
@@ -35,6 +36,7 @@ if(BUILD_TESTING)
     add_executable(AnotherChanceTests
         tests/EngineTests.cpp
         src/html/HtmlParser.cpp
+        src/script/ScriptRuntime.cpp
         src/style/Style.cpp
         src/util/Url.cpp
         src/layout/Layout.cpp

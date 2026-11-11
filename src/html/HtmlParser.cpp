@@ -244,6 +244,13 @@ Document Parse(std::string_view input) {
             const std::string raw(input.substr(i, limit - i));
             if (element->tag == "style") {
                 document.embeddedCss += raw + "\n";
+            } else {
+                // Preserve inline script raw text as a non-rendered DOM text child.
+                auto code = std::make_unique<Node>();
+                code->type = Node::Type::Text;
+                code->text = raw;
+                code->parent = element;
+                element->children.push_back(std::move(code));
             }
             i = limit;
             if (end == std::string::npos) break;

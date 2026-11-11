@@ -1,4 +1,5 @@
 #include "html/HtmlParser.h"
+#include "script/ScriptRuntime.h"
 #include "style/Style.h"
 #include "util/Url.h"
 #include "tech/IdScreenRect.h"
@@ -283,6 +284,38 @@ void TestLayoutGeometry() {
     DeleteDC(dc);
 }
 
+
+void TestScriptDom() {
+    HDC dc = CreateCompatibleDC(nullptr);
+    Check(dc!=nullptr,"memory DC for script DOM");
+    ac::style::Sheet sheet;
+    ac::image::Store images;
+    ac::layout::PageLayout layout;
+    auto doc=ac::html::Parse(
+        "<html><head><title>Antes</title></head><body>"
+        "<div id='root'></div><script>"
+        "document.getElementById('root').innerHTML = '<a href=\"/js\">Enlace JS</a>';"
+        "document.title = 'Despues';"
+        "</script></body></html>");
+    auto done=ac::script::ExecuteInline(doc);
+    Check(done.operations==2 && done.unsupported==0,"DOM script operations");
+    Check(doc.title=="Despues","script changed title");
+    sheet.Parse(doc.embeddedCss);
+    layout.Reflow(dc,doc,sheet,images,L"https://example.org/",480);
+    Check(layout.HasVisibleContent(),"script-generated HTML must render");
+    Check(layout.LinkAt(40,25,0,0)==L"https://example.org/js",
+          "script-generated hyperlink must be clickable");
+    auto unsupported=ac::html::Parse(
+        "<html><body><div id='app'></div>"
+        "<script>fetch('/api').then(()=>window.render())</script></body></html>");
+    const auto skipped=ac::script::ExecuteInline(unsupported);
+    Check(skipped.operations==0 && skipped.unsupported==1,
+          "unsupported JavaScript is reported, not silently claimed supported");
+    layout.Reflow(dc,unsupported,sheet,images,L"https://example.org/",480);
+    Check(!layout.HasVisibleContent(),"unsupported JS cannot fabricate content");
+    DeleteDC(dc);
+}
+
 void TestUrls() {
     Check(ac::url::Normalize(L"example.org") == L"https://example.org",
           "address normalization");
@@ -326,6 +359,7 @@ int main() {
         TestHtml();
         TestStyles();
         TestUrls();
+        TestScriptDom();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
