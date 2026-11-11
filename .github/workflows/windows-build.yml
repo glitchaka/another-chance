@@ -16,6 +16,19 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test HTML, CSS and URL core
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Validate actual browsing on Google and Internet Archive
+        working-directory: build
+        run: .\\Release\\AnotherChanceSmoke.exe .\\Release\\AnotherChance.exe --live
+      - name: Upload real-site diagnostics (even when compatibility fails)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnotherChance-Live-Site-Diagnostics
+          path: |
+            build/AnotherChance-live-google.bmp
+            build/AnotherChance-live-archive.bmp
+          if-no-files-found: ignore
+      # Only publish the executable when live-site interaction passed.
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:

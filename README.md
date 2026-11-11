@@ -112,3 +112,16 @@ y controles de ventana dibujados dentro de la aplicación; una fila de navegaci�
 de 42 px con Atrás / Adelante / Recargar, dirección y acciones de página.
 La fila superior permite arrastrar la ventana por las zonas libres.
 No se usan decoraciones del sistema, Chromium, GTK ni Qt.
+
+
+## Criterio de publicación y pruebas con sitios reales
+
+La compilación no se considera un navegador funcional hasta que las pruebas
+**Google Search** e **Internet Archive** puedan cargar, representar e interactuar
+con controles reales, no solo recibir HTTP 200. `AnotherChanceSmoke --live`
+abre ambas páginas y comprueba la existencia de controles interactivos, el
+renderizado visible y el estado de red. El workflow publica el ejecutable
+solo cuando superan esa validación. Las capturas de diagnóstico se conservan
+también ante un fallo. La prueba requiere acceso a Internet desde el runner
+de Windows; un bloqueo externo debe investigarse antes de declarar
+compatibilidad, y nunca debe convertirse en un falso resultado positivo.

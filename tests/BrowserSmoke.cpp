@@ -339,11 +339,61 @@ bool Until(Predicate condition, unsigned timeoutMs) {
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2) {
-        std::cerr << "Usage: AnotherChanceSmoke.exe <path-to-browser.exe>\n";
+    if (argc != 2 && argc != 3) {
+        std::cerr << "Usage: AnotherChanceSmoke.exe <browser.exe> [--live]\n";
         return 2;
     }
     try {
+        if (argc == 3) {
+            if (std::wstring_view(argv[2]) != L"--live") return 2;
+            // Release gate: a real website must be usable, not merely produce
+            // HTTP 200 or a "no se pudo representar" fallback.
+            // Captures are diagnostic and never substitutes for a passing test.
+            struct Site {
+                const wchar_t* url;
+                const wchar_t* name;
+                const char* screenshot;
+            };
+            const Site sites[] = {
+                {L"https://www.google.com/search?q=google",
+                 L"Google", "AnotherChance-live-google.bmp"},
+                {L"https://archive.org/",
+                 L"Archive", "AnotherChance-live-archive.bmp"}
+            };
+            bool allPassed = true;
+            for (const auto& site : sites) {
+                BrowserProcess browser(argv[1], site.url);
+                const bool completed = Until([&] {
+                    return !browser.IsAlive() ||
+                           browser.HasHttp200() ||
+                           browser.StatusContains(L"Sin contenido representable") ||
+                           browser.StatusContains(L"Windows ");
+                }, 50000);
+                Sleep(500);
+                CaptureScreenshot(browser.Window(), site.screenshot);
+                const bool visible = browser.IsAlive() &&
+                    SendMessageW(browser.Window(), WM_APP + 42, 0, 0) == 1;
+                // A browser must support working page inputs, not just
+                // draw fake square-bracket text in place of <input>.
+                const HWND address = FindWindowExW(
+                    browser.Window(), nullptr, L"Edit", nullptr);
+                const HWND pageField = FindWindowExW(
+                    browser.Window(), address, L"Edit", nullptr);
+                const bool interactive = pageField != nullptr &&
+                    IsWindowVisible(pageField) != FALSE;
+                const bool success = completed && browser.HasHttp200() &&
+                    visible && interactive;
+                std::wcout << L"LIVE [" << site.name << L"]"
+                           << L" completed=" << completed
+                           << L" HTTP200=" << browser.HasHttp200()
+                           << L" visible=" << visible
+                           << L" pageInput=" << interactive << L"\n";
+                if (!success) allPassed = false;
+            }
+            Check(allPassed,
+                "The browser does not yet render and interact with real websites");
+            return 0;
+        }
         LocalServer server;
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
