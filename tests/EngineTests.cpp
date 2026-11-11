@@ -41,6 +41,20 @@ void TestHtml() {
     Check(heading->children.front()->text == "Hola ñandú", "numeric UTF-8 entities");
     const auto* script = Find(*document.root, "script");
     Check(script != nullptr, "script is parsed but never executed");
+    // A conforming HTML5 page may omit </head>; its body must still be visible.
+    const auto implicitHead = ac::html::Parse(
+        "<html><head><title>Sin cierre de head</title>"
+        "<body><h1>Contenido real</h1></body></html>");
+    const auto* body = Find(*implicitHead.root, "body");
+    Check(body && body->parent && body->parent->tag == "html",
+          "body implicitly closes head");
+    const auto paragraphs = ac::html::Parse(
+        "<html><body><p>Uno<p>Dos</body></html>");
+    const auto* documentBody = Find(*paragraphs.root, "body");
+    Check(documentBody && documentBody->children.size() == 2 &&
+          documentBody->children[0]->tag == "p" &&
+          documentBody->children[1]->tag == "p",
+          "implicit paragraph closing");
 }
 void TestStyles() {
     auto document = ac::html::Parse(

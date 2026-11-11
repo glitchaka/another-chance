@@ -205,6 +205,26 @@ Document Parse(std::string_view input) {
         }
         i = p < input.size() ? p + 1 : input.size();
         Node* element = node.get();
+        // HTML5 permits some closing tags to be omitted. Without this,
+        // the body of a real site may incorrectly remain inside <head>,
+        // inheriting display:none and producing an entirely white screen.
+        if (element->tag == "body") {
+            OpenElement* head = open.Peek();
+            while (head && head->node != document.root.get() &&
+                   head->node->tag != "head") {
+                head = head->link.GetNext();
+            }
+            if (head && head->node->tag == "head") {
+                while (open.Peek() != head) open.Get();
+                open.Get();
+            }
+        }
+        if (element->tag == "p" || element->tag == "li") {
+            // Sibling paragraphs and list items close their predecessor.
+            // Preserve other elements until their matching close tags.
+            OpenElement* top = open.Peek();
+            if (top && top->node->tag == element->tag) open.Get();
+        }
         element->parent = current();
         current()->children.push_back(std::move(node));
 
