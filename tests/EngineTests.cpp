@@ -1,6 +1,7 @@
 #include "html/HtmlParser.h"
 #include "style/Style.h"
 #include "util/Url.h"
+#include "tech/IdScreenRect.h"
 #include <windows.h>
 #include <iostream>
 #include <stdexcept>
@@ -53,9 +54,27 @@ void TestStyles() {
     const auto link = sheet.Compute(*anchor, parent);
     Check(link.bold && link.underline, "link style and CSS font weight");
 }
+void TestScreenRects() {
+    using ac::tech::idScreenRect;
+    auto one = idScreenRect::FromHalfOpen(10, 20, 30, 40);
+    Check(one.Width() == 20 && one.Height() == 20, "screen rectangle size");
+    Check(one.Contains(10, 20) && one.Contains(29, 39), "inclusive pixel bounds");
+    Check(!one.Contains(30, 40), "right and bottom boundaries exclusive");
+    one.Intersect(idScreenRect::FromHalfOpen(20, 30, 40, 50));
+    Check(one.Width() == 10 && one.Height() == 10, "renderer clipping");
+    one.Intersect(idScreenRect::FromHalfOpen(45, 45, 60, 60));
+    Check(one.IsEmpty(), "non-overlapping rectangles are empty");
+}
+
 void TestUrls() {
     Check(ac::url::Normalize(L"example.org") == L"https://example.org",
           "address normalization");
+    Check(ac::url::Normalize(L"mi búsqueda") == L"",
+          "search text is not redirected to an external provider");
+    Check(ac::url::Normalize(L"palabra") == L"",
+          "single-word input is rejected instead of redirected");
+    Check(ac::url::Normalize(L"javascript:alert(1)") == L"",
+          "unsupported active URL scheme is rejected");
     Check(ac::url::Resolve(L"https://example.org/docs/index.html", L"../about") ==
           L"https://example.org/about", "relative URL resolution");
     Check(ac::url::IsWeb(L"https://example.org"), "HTTPS supported");
@@ -70,6 +89,7 @@ int main() {
         TestHtml();
         TestStyles();
         TestUrls();
+        TestScreenRects();
         std::cout << "HTML, CSS y URL: OK\n";
         return 0;
     } catch (const std::exception& error) {

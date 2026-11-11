@@ -473,7 +473,7 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
         std::to_string(address.size()) + " value=" + url::ToUtf8(address);
     TraceBoot(normalizedTrace.c_str());
     if (address.empty()) {
-        SetStatus(L"Dirección no admitida. Escribe una URL HTTP/HTTPS o una búsqueda.");
+        SetStatus(L"Introduce una URL HTTP/HTTPS. La búsqueda web todavía no está implementada.");
         return;
     }
     if (recordHistory) {

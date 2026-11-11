@@ -30,7 +30,7 @@ Ejecutable: `build/Release/AnotherChance.exe`.
 
 ## Estado funcional inicial
 
-Direcciones HTTP/HTTPS, búsqueda desde la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. No interpreta JavaScript, no admite formularios interactivos y no promete renderizar correctamente todos los sitios modernos.
+Direcciones HTTP/HTTPS, introducción de direcciones en la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. No interpreta JavaScript, no admite formularios interactivos y no promete renderizar correctamente todos los sitios modernos.
 
 La compilación x64 y los tests de HTML, CSS y URL se verifican con GitHub Actions. Además, `BrowserEndToEnd` inicia la aplicación Windows real, visita un servidor HTTP local, comprueba la carga de HTML, CSS e imágenes, sigue un enlace y utiliza el historial. No implica compatibilidad con toda la web moderna.
 
@@ -47,3 +47,13 @@ Diseño nativo renovado inspirado en las referencias proporcionadas: franja supe
 ## Ventana y diseño propio
 
 La ventana usa un marco Win32 dibujado íntegramente en el cliente, sin barra de título ni botones del sistema. Es redimensionable desde los bordes, arrastrable desde las zonas libres de su encabezado, maximizable y minimizable mediante controles propios. El encabezado de una sola franja distingue a Another Chance de las barras de pestañas de Chromium: identidad visual a la izquierda, búsqueda central y selector de vistas a la derecha. El selector permite alternar entre hasta cinco vistas.
+
+## Estado real del motor y procedencia del código
+
+- **Código adaptado de DOOM 3 BFG**: `neo/idlib/containers/Queue.h` → `src/tech/IdQueue.h` (cola de solicitudes), `neo/idlib/containers/Stack.h` → `src/tech/IdStack.h` (parser HTML), `neo/renderer/ScreenRect.h/.cpp` → `src/tech/IdScreenRect.h` (recorte y hit testing en el layout).
+- **Todavía NO integrado**: el rasterizador GPU de idTech, su sistema de ventanas, comandos de renderizado, shaders y toda su infraestructura de materiales. El contenido de las páginas se sigue rasterizando con GDI de Windows, no con el motor gráfico de Doom. La integración completa requiere adaptar componentes de renderizado sin arrastrar dependencias del juego.
+- **Implementación original limitada**: cliente de HTTP/HTTPS mediante WinHTTP, parser HTML parcial, estilos CSS parciales, layout de texto, imágenes mediante WIC y GUI Win32/GDI+.
+- **Sin motores de navegador externos**: no se integra DuckDuckGo Browser ni Chromium, Firefox, Blink, Gecko o WebView2. Se ha eliminado la redirección automática a DuckDuckGo Lite; el texto que no sea una URL válida ahora se rechaza. **La búsqueda web sigue pendiente**, no se ha implementado un índice o proveedor propio.
+- **No es un navegador de uso general**: carece de ejecución de JavaScript, CSS moderno, formularios operativos, almacenamiento de sesión, navegación segura suficientemente evaluada y compatibilidad web amplia. No utilizar para autenticación, operaciones bancarias ni información sensible.
+
+Este estado es intencionadamente explícito para no confundir una prueba de compilación o una página HTML simple con un navegador completo.

@@ -1,4 +1,5 @@
 #include "layout/Layout.h"
+#include "tech/IdScreenRect.h"
 #include "util/Url.h"
 #include <algorithm>
 #include <cwctype>
@@ -223,10 +224,17 @@ void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
     const int saved = SaveDC(dc);
     IntersectClipRect(dc, viewport.left, viewport.top, viewport.right, viewport.bottom);
     SetBkMode(dc, TRANSPARENT);
+    // idTech-derived screen rectangles now cull offscreen draw calls.
+    // The GDI rasterizer remains provisional; this is not Doom's GPU backend.
+    const tech::idScreenRect visible = tech::idScreenRect::FromHalfOpen(
+        viewport.left, viewport.top, viewport.right, viewport.bottom);
     for (const Item& item : items_) {
         const int y = item.rect.top + top - scroll;
         const int bottom = item.rect.bottom + top - scroll;
-        if (bottom < viewport.top || y > viewport.bottom) continue;
+        auto bounds = tech::idScreenRect::FromHalfOpen(
+            item.rect.left, y, item.rect.right, bottom);
+        bounds.Intersect(visible);
+        if (bounds.IsEmpty()) continue;
         if (item.kind == Item::Kind::Image) {
             const auto* bitmap = images_ ? images_->Find(item.imageUrl) : nullptr;
             if (!bitmap) continue;
@@ -262,8 +270,9 @@ void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
 std::wstring PageLayout::LinkAt(int x, int y, int top, int scroll) const {
     const int contentY = y - top + scroll;
     for (const auto& item : items_) {
-        if (!item.link.empty() && x >= item.rect.left && x < item.rect.right &&
-            contentY >= item.rect.top && contentY < item.rect.bottom) return item.link;
+        const auto bounds = tech::idScreenRect::FromHalfOpen(
+            item.rect.left, item.rect.top, item.rect.right, item.rect.bottom);
+        if (!item.link.empty() && bounds.Contains(x, contentY)) return item.link;
     }
     return {};
 }

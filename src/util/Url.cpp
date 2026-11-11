@@ -42,25 +42,6 @@ static std::wstring Trim(std::wstring str) {
     return str;
 }
 
-static std::wstring PercentEncode(std::wstring_view query) {
-    std::wstring encoded;
-    for (unsigned char byte : ToUtf8(query)) {
-        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
-            || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_'
-            || byte == '.' || byte == '~') {
-            encoded.push_back(static_cast<wchar_t>(byte));
-        } else if (byte == ' ') {
-            encoded += L"+";
-        } else {
-            constexpr wchar_t digits[] = L"0123456789ABCDEF";
-            encoded += L'%';
-            encoded += digits[byte >> 4];
-            encoded += digits[byte & 15];
-        }
-    }
-    return encoded;
-}
-
 bool IsWeb(std::wstring_view input) {
     return input.starts_with(L"https://") || input.starts_with(L"http://");
 }
@@ -76,9 +57,11 @@ std::wstring Normalize(std::wstring input) {
         input.starts_with(L"data:")) {
         return {}; // Explicitly disallow unsupported or active schemes.
     }
+    // Bare search terms are not URLs. Never silently forward user input to
+    // an external provider. Search is not implemented in this prototype.
     if (input.find_first_of(L" \t") != std::wstring::npos ||
         input.find(L'.') == std::wstring::npos) {
-        return L"https://lite.duckduckgo.com/lite/?q=" + PercentEncode(input);
+        return {};
     }
     return L"https://" + input;
 }
