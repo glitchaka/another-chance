@@ -216,10 +216,10 @@ void NativeFormControls::Reposition(const RECT& viewport,int scroll) {
         ShowWindow(field.hwnd,visible?SW_SHOWNA:SW_HIDE);
         if(!visible) continue;
         MoveWindow(field.hwnd,x,y,width,height,TRUE);
-        const int left=std::max(0L,viewport.left-x);
-        const int right=std::min(width,viewport.right-x);
-        const int top=std::max(0L,viewport.top-y);
-        const int bottom=std::min(height,viewport.bottom-y);
+        const int left=std::max<int>(0,viewport.left-x);
+        const int right=std::min<int>(width,viewport.right-x);
+        const int top=std::max<int>(0,viewport.top-y);
+        const int bottom=std::min<int>(height,viewport.bottom-y);
         HRGN clip=CreateRectRgn(left,top,right,bottom);
         if(clip) {
             if(SetWindowRgn(field.hwnd,clip,TRUE)==0) DeleteObject(clip);
