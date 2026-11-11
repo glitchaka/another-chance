@@ -110,6 +110,12 @@ bool NativeFormControls::IsReset(HWND hwnd) const {
     return field && field->kind==Kind::Reset;
 }
 std::wstring NativeFormControls::Value(const Field& field) const {
+    if (field.kind==Kind::Submit || field.kind==Kind::Button ||
+        field.kind==Kind::Reset) {
+        // Form successful-controls use the value attribute, not the button
+        // caption rendered in its native Win32 control.
+        return url::ToWide(field.node->Attribute("value"));
+    }
     if (field.kind==Kind::Checkbox || field.kind==Kind::Radio) {
         return field.node->Attribute("value").empty() ? L"on" :
             url::ToWide(field.node->Attribute("value"));

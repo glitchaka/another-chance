@@ -158,10 +158,10 @@ private:
                            "<form action='/posted' method='post'>"
                            "<input name='q' placeholder='Nombre'>"
                            "<input type='hidden' name='lang' value='es'>"
-                           "<button type='submit'>Enviar</button>"
+                           "<button type='submit' name='action' value='send'>Enviar</button>"
                            "</form></body></html>";
                 } else if (request.find("POST /posted ") != std::string::npos) {
-                    const bool matched=request.find("q=prueba&lang=es")!=std::string::npos;
+                    const bool matched=request.find("q=prueba&lang=es&action=send")!=std::string::npos;
                     if (matched) ++postRequests;
                     body=matched ? "<html><title>POST recibido</title><body>OK</body></html>"
                                  : "<html><title>POST incorrecto</title><body>Error</body></html>";
