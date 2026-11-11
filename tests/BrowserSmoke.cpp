@@ -601,11 +601,14 @@ int wmain(int argc, wchar_t** argv) {
                 SendMessageW(input,WM_CHAR,static_cast<WPARAM>(character),1);
             }
             wchar_t typed[64]{};
-            GetWindowTextW(input,typed,64);
+            // WM_GETTEXT is explicitly marshalled across processes; the
+            // convenience GetWindowTextW API may return an empty string for
+            // another process's EDIT child even while the field has text.
+            SendMessageW(input,WM_GETTEXT,64,reinterpret_cast<LPARAM>(typed));
             if (std::wstring_view(typed)!=L"prueba") {
                 const auto result=SendMessageW(input,WM_SETTEXT,0,
                     reinterpret_cast<LPARAM>(L"prueba"));
-                GetWindowTextW(input,typed,64);
+                SendMessageW(input,WM_GETTEXT,64,reinterpret_cast<LPARAM>(typed));
                 wchar_t name[80]{};
                 GetClassNameW(input,name,80);
                 std::wcerr<<L"FORM INPUT DIAG: WM_SETTEXT="<<result
