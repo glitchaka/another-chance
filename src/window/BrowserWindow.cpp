@@ -624,16 +624,28 @@ void BrowserWindow::OnImageReady(LoadedImage* raw) {
     }
 }
 
+void BrowserWindow::DrawContent(HDC dc) {
+    const RECT view = ContentRect();
+    HBRUSH paper = CreateSolidBrush(RGB(255, 255, 255));
+    FillRect(dc, &view, paper);
+    DeleteObject(paper);
+    if (document_) {
+        layout_.Draw(dc, view.top, scrollY_, view);
+    }
+}
+
+void BrowserWindow::InvalidateContent() {
+    if (!hwnd_) return;
+    const RECT viewport = ContentRect();
+    InvalidateRect(hwnd_, &viewport, FALSE);
+}
+
 void BrowserWindow::DrawClient(HDC dc) {
     RECT client{0, 0, clientWidth_, clientHeight_};
     HBRUSH background = CreateSolidBrush(RGB(255, 255, 255));
     FillRect(dc, &client, background);
     DeleteObject(background);
-
-    RECT view = ContentRect();
-    if (document_) {
-        layout_.Draw(dc, view.top, scrollY_, view);
-    }
+    DrawContent(dc);
     std::vector<chrome::Tab> tabLabels;
     tabLabels.reserve(tabs_.size());
     for (size_t i = 0; i < tabs_.size(); ++i) {
@@ -648,10 +660,51 @@ void BrowserWindow::DrawClient(HDC dc) {
 
 void BrowserWindow::Paint() {
     PAINTSTRUCT paint{};
-    HDC dc = BeginPaint(hwnd_, &paint);
-    if (dc) DrawClient(dc);
+    HDC target = BeginPaint(hwnd_, &paint);
+    if (!target) {
+        EndPaint(hwnd_, &paint);
+        return;
+    }
+    const RECT dirty = paint.rcPaint;
+    const int width = dirty.right - dirty.left;
+    const int height = dirty.bottom - dirty.top;
+    if (width <= 0 || height <= 0) {
+        EndPaint(hwnd_, &paint);
+        return;
+    }
+
+    HDC buffer = CreateCompatibleDC(target);
+    HBITMAP bitmap = buffer ? CreateCompatibleBitmap(target, width, height) : nullptr;
+    if (bitmap) {
+        HGDIOBJ previous = SelectObject(buffer, bitmap);
+        // Render in window coordinates but allocate only the dirty rectangle.
+        // Repaint the document independently of the fixed application header.
+        SetViewportOrgEx(buffer, -dirty.left, -dirty.top, nullptr);
+        const RECT view = ContentRect();
+        const bool contentOnly = dirty.top >= view.top &&
+                                 dirty.bottom <= view.bottom;
+        if (contentOnly) {
+            DrawContent(buffer);
+        } else {
+            DrawClient(buffer);
+        }
+        SetViewportOrgEx(buffer, 0, 0, nullptr);
+        BitBlt(target, dirty.left, dirty.top, width, height,
+               buffer, 0, 0, SRCCOPY);
+        SelectObject(buffer, previous);
+    } else {
+        // Graceful fallback if the offscreen surface could not be allocated.
+        const RECT view = ContentRect();
+        if (dirty.top >= view.top && dirty.bottom <= view.bottom)
+            DrawContent(target);
+        else
+            DrawClient(target);
+    }
+    if (bitmap) DeleteObject(bitmap);
+    if (buffer) DeleteDC(buffer);
     EndPaint(hwnd_, &paint);
 }
+
 
 LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
@@ -751,9 +804,17 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             }
             break;
         case WM_MOUSEWHEEL: {
-            const int notches = GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA;
-            scrollY_ = std::clamp(scrollY_ - notches * 96, 0, MaxScroll());
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            // Preserve fractional wheel deltas from high-resolution devices.
+            wheelRemainder_ += GET_WHEEL_DELTA_WPARAM(wparam);
+            const int ticks = wheelRemainder_ / WHEEL_DELTA;
+            wheelRemainder_ %= WHEEL_DELTA;
+            if (ticks != 0) {
+                const int next = std::clamp(scrollY_ - ticks * 96, 0, MaxScroll());
+                if (next != scrollY_) {
+                    scrollY_ = next;
+                    InvalidateContent();
+                }
+            }
             return 0;
         }
         case WM_LBUTTONUP: {
@@ -806,13 +867,13 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             if (wparam == VK_NEXT || wparam == VK_DOWN) {
                 scrollY_ = std::min(MaxScroll(), scrollY_ +
                     (wparam == VK_NEXT ? 480 : 48));
-                InvalidateRect(hwnd_, nullptr, FALSE);
+                InvalidateContent();
                 return 0;
             }
             if (wparam == VK_PRIOR || wparam == VK_UP) {
                 scrollY_ = std::max(0, scrollY_ -
                     (wparam == VK_PRIOR ? 480 : 48));
-                InvalidateRect(hwnd_, nullptr, FALSE);
+                InvalidateContent();
                 return 0;
             }
             break;

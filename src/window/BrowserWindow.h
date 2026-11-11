@@ -93,6 +93,7 @@ private:
     layout::PageLayout layout_;
     image::Store images_;
     int scrollY_ = 0;
+    int wheelRemainder_ = 0;
     int clientWidth_ = 980;
     int clientHeight_ = 690;
     unsigned generation_ = 0;
@@ -123,6 +124,8 @@ private:
     void Reflow();
     void Paint();
     void DrawClient(HDC dc);
+    void DrawContent(HDC dc);
+    void InvalidateContent();
     void ShowHome();
     void SaveActiveTab();
     void SwitchTab(size_t index);

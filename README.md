@@ -57,3 +57,7 @@ La ventana usa un marco Win32 dibujado íntegramente en el cliente, sin barra de
 - **No es un navegador de uso general**: carece de ejecución de JavaScript, CSS moderno, formularios operativos, almacenamiento de sesión, navegación segura suficientemente evaluada y compatibilidad web amplia. No utilizar para autenticación, operaciones bancarias ni información sensible.
 
 Este estado es intencionadamente explícito para no confundir una prueba de compilación o una página HTML simple con un navegador completo.
+
+## Repintado y desplazamiento
+
+La rueda del ratón invalida exclusivamente el rectángulo del documento y conserva los incrementos parciales de dispositivos de alta resolución. La superficie afectada se dibuja primero en un bitmap compatible y se copia al cliente en una sola operación. La cabecera solo se vuelve a dibujar cuando cambia su propio estado o el tamaño de la ventana; esto elimina el repintado completo innecesario que producía parpadeo al desplazarse.
