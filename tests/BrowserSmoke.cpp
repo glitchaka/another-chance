@@ -10,6 +10,7 @@
 #include <windowsx.h>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
