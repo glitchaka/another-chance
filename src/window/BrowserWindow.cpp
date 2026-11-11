@@ -603,8 +603,7 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
             SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
                       L" | Sin contenido representable (JS/CSS no admitido)");
         } else {
-            SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
-                      L" | Motor de páginas original (sin JavaScript)");
+            SetStatus(L"HTTP " + std::to_wstring(result->response.status));
         }
     } else {
         SetStatus(result->response.error);
