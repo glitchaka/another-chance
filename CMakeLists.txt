@@ -54,10 +54,15 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-    add_executable(AnotherChanceSmoke tests/BrowserSmoke.cpp)
+    add_executable(AnotherChanceSmoke
+        tests/BrowserSmoke.cpp
+        src/net/HttpClient.cpp
+        src/util/Url.cpp
+    )
     target_compile_features(AnotherChanceSmoke PRIVATE cxx_std_20)
+    target_include_directories(AnotherChanceSmoke PRIVATE src)
     target_compile_definitions(AnotherChanceSmoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(AnotherChanceSmoke PRIVATE ws2_32 user32 shell32)
+    target_link_libraries(AnotherChanceSmoke PRIVATE ws2_32 user32 shell32 winhttp shlwapi)
     if(MSVC)
         target_compile_options(AnotherChanceSmoke PRIVATE /W4 /permissive- /utf-8 /EHsc)
     endif()

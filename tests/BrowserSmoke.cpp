@@ -7,6 +7,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <shellapi.h>
+#include "net/HttpClient.h"
 #include <windowsx.h>
 #include <atomic>
 #include <chrono>
@@ -407,6 +408,32 @@ int wmain(int argc, wchar_t** argv) {
             };
             bool allPassed = true;
             for (const auto& site : sites) {
+                // Observe actual response bytes. A green HTTP status does not
+                // tell us whether the server sent a JS shell or static HTML.
+                // This diagnostic runs only with --live, not in production.
+                const auto response = ac::net::HttpClient{}.Get(site.url);
+                const std::string file = std::wstring_view(site.name) == L"Google" ?
+                    "AnotherChance-live-google.html" :
+                    "AnotherChance-live-archive.html";
+                {
+                    std::ofstream capture(file,std::ios::binary);
+                    capture.write(response.body.data(),
+                                  static_cast<std::streamsize>(response.body.size()));
+                }
+                auto countTag = [&](std::string_view tag) {
+                    size_t count = 0;
+                    size_t pos = 0;
+                    while ((pos = response.body.find(tag, pos)) != std::string::npos) {
+                        ++count; pos += tag.size();
+                    }
+                    return count;
+                };
+                std::wcout<<L"HTTP BODY ["<<site.name<<L"] status="
+                          <<response.status<<L" bytes="<<response.body.size()
+                          <<L" scriptTags="<<countTag("<script")
+                          <<L" formTags="<<countTag("<form")
+                          <<L" inputTags="<<countTag("<input")
+                          <<L" error="<<response.error<<L"\n";
                 BrowserProcess browser(argv[1], site.url);
                 const bool completed = Until([&] {
                     return !browser.IsAlive() ||
