@@ -16,6 +16,16 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test HTML, CSS and URL core
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Upload local UI diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnotherChance-Local-Test-Diagnostics
+          path: |
+            build/AnotherChance-real-form.bmp
+            build/AnotherChance-actual.bmp
+            build/AnotherChance-tabbed-ui.bmp
+          if-no-files-found: ignore
       - name: Validate actual browsing on Google and Internet Archive
         working-directory: build
         run: .\\Release\\AnotherChanceSmoke.exe .\\Release\\AnotherChance.exe --live

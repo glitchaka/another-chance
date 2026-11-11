@@ -598,12 +598,36 @@ int wmain(int argc, wchar_t** argv) {
             Check(submit!=nullptr && IsWindowVisible(submit),
                   "page submit must be a visible Win32 Button");
             CaptureScreenshot(controls.Window(),"AnotherChance-real-form.bmp");
+            SetForegroundWindow(controls.Window());
             SendMessageW(submit,BM_CLICK,0,0);
-            Check(Until([&] {
+            bool passed = Until([&] {
                 return controls.IsAlive() &&
                     controls.HasTitle(L"Formulario enviado") &&
                     server.formRequests.load()>0;
-            },15000),"native form GET submission did not navigate");
+            },5000);
+            if (!passed) {
+                HWND label=FindWindowExW(controls.Window(),nullptr,L"Static",nullptr);
+                HWND urlBar=FindWindowExW(controls.Window(),nullptr,L"Edit",nullptr);
+                wchar_t status[512]{},address[512]{},value[256]{};
+                if(label) GetWindowTextW(label,status,512);
+                if(urlBar) GetWindowTextW(urlBar,address,512);
+                GetWindowTextW(input,value,256);
+                std::wcerr<<L"FORM DIAG: buttonID="<<GetDlgCtrlID(submit)
+                          <<L" status=["<<status<<L"] URL=["<<address
+                          <<L"] input=["<<value<<L"] count="
+                          <<server.formRequests.load()<<L"\n";
+                // Diagnose whether cross-process BM_CLICK was ignored, while
+                // keeping the regression test failed if the real click failed.
+                PostMessageW(controls.Window(),WM_COMMAND,
+                             MAKEWPARAM(GetDlgCtrlID(submit),BN_CLICKED),
+                             reinterpret_cast<LPARAM>(submit));
+                const bool commandWorked=Until([&] {
+                    return server.formRequests.load()>0;
+                },5000);
+                std::cerr<<"FORM DIAG direct WM_COMMAND navigated="
+                         <<commandWorked<<"\n";
+            }
+            Check(passed,"native form GET submission did not navigate");
             std::cout<<"PASS: native HTML input, button, hidden fields and GET submit\n";
         }
         {
