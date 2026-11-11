@@ -593,7 +593,17 @@ int wmain(int argc, wchar_t** argv) {
             input = FindWindowExW(controls.Window(),input,L"Edit",nullptr);
             Check(input!=nullptr && IsWindowVisible(input),
                   "page input must be a live visible Win32 Edit");
-            SetWindowTextW(input,L"prueba");
+            // SetWindowTextW cannot edit an EDIT belonging to another
+            // process. Send keystrokes to its control procedure instead.
+            SendMessageW(input,EM_SETSEL,0,-1);
+            SendMessageW(input,WM_CLEAR,0,0);
+            for (wchar_t character : std::wstring_view(L"prueba")) {
+                SendMessageW(input,WM_CHAR,static_cast<WPARAM>(character),1);
+            }
+            wchar_t typed[64]{};
+            GetWindowTextW(input,typed,64);
+            Check(std::wstring_view(typed)==L"prueba",
+                  "native HTML input did not accept typed characters");
             HWND submit = FindWindowExW(controls.Window(),nullptr,L"Button",nullptr);
             Check(submit!=nullptr && IsWindowVisible(submit),
                   "page submit must be a visible Win32 Button");
