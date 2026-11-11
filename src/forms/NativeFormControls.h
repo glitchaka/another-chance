@@ -9,6 +9,12 @@ namespace ac::forms {
 
 // Live Win32 form widgets bound to the original HTML node, independent from
 // layout and networking. No embedded browser engine or WebView is used.
+struct FormRequest {
+    std::wstring url;
+    std::string body;
+    bool post = false;
+};
+
 class NativeFormControls final {
 public:
     static constexpr UINT kSubmitByEnter = WM_APP + 52;
@@ -25,8 +31,8 @@ public:
     [[nodiscard]] bool Owns(HWND hwnd) const;
     [[nodiscard]] bool IsSubmit(HWND hwnd) const;
     [[nodiscard]] bool IsReset(HWND hwnd) const;
-    [[nodiscard]] std::wstring SubmitGet(HWND initiator,
-                                          std::wstring_view pageUrl) const;
+    [[nodiscard]] FormRequest BuildRequest(HWND initiator,
+                                           std::wstring_view pageUrl) const;
     void ResetForm(HWND initiator);
     [[nodiscard]] size_t Count() const { return fields_.size(); }
 

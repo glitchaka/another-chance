@@ -49,8 +49,12 @@ private:
         idQueueNode<NavigationJob> queueNode;
         unsigned generation;
         std::wstring url;
-        NavigationJob(unsigned id, std::wstring address)
-            : generation(id), url(std::move(address)) {}
+        std::string body;
+        bool post = false;
+        NavigationJob(unsigned id, std::wstring address,
+                      std::string payload = {}, bool isPost = false)
+            : generation(id), url(std::move(address)),
+              body(std::move(payload)), post(isPost) {}
     };
     struct LoadedPage {
         unsigned generation = 0;
@@ -143,7 +147,8 @@ private:
     void OpenMenu();
     void OpenTabMenu();
     void MaximizeRestore();
-    void Navigate(std::wstring address, bool recordHistory);
+    void Navigate(std::wstring address, bool recordHistory,
+                  std::string body = {}, bool post = false);
     void GoBack();
     void GoForward();
     void Reload();

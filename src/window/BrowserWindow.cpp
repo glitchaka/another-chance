@@ -254,7 +254,8 @@ void BrowserWindow::WorkerLoop() {
         if (!job) continue;
         auto result = std::make_unique<LoadedPage>();
         result->generation = job->generation;
-        result->response = http.Get(job->url);
+        result->response = job->post ?
+            http.Post(job->url,job->body) : http.Get(job->url);
         if (result->response.Ok()) {
             const auto& response = result->response;
             if (!response.contentType.empty() &&
@@ -506,9 +507,11 @@ void BrowserWindow::SetStatus(const std::wstring& message) {
     if (status_) SetWindowTextW(status_, message.c_str());
 }
 
-void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
+void BrowserWindow::Navigate(std::wstring address, bool recordHistory,
+                             std::string body, bool post) {
     const std::wstring typed = address;
-    address = url::ResolveInput(std::move(address), searchProvider_);
+    address = post ? url::Normalize(std::move(address)) :
+        url::ResolveInput(std::move(address), searchProvider_);
     if (address.empty()) {
         SetStatus(L"No se reconoce la dirección. Introduce una URL o selecciona un buscador.");
         return;
@@ -542,7 +545,7 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
         if (stopping_) return;
         // Keep only the newest queued navigation; stale network results are ignored.
         while (!pendingJobs_.IsEmpty()) delete pendingJobs_.RemoveFirst();
-        pendingJobs_.Add(new NavigationJob(id, address));
+        pendingJobs_.Add(new NavigationJob(id,address,std::move(body),post));
     }
     taskCondition_.notify_one();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -855,9 +858,9 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
         case forms::NativeFormControls::kSubmitByEnter: {
             auto from = reinterpret_cast<HWND>(wparam);
             if (formControls_.Owns(from)) {
-                const auto target = formControls_.SubmitGet(from, currentUrl_);
-                if (!target.empty()) Navigate(target, true);
-                else SetStatus(L"Formulario no compatible: falta el envío o usa POST.");
+                const auto request = formControls_.BuildRequest(from,currentUrl_);
+                if (!request.url.empty()) Navigate(request.url,true,request.body,request.post);
+                else SetStatus(L"No se pudo construir la solicitud del formulario.");
             }
             return 0;
         }
@@ -893,9 +896,10 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                     if (formControls_.IsReset(control))
                         formControls_.ResetForm(control);
                     else if (formControls_.IsSubmit(control)) {
-                        const auto target = formControls_.SubmitGet(control,currentUrl_);
-                        if (!target.empty()) Navigate(target,true);
-                        else SetStatus(L"Formulario no compatible: requiere POST o acción válida.");
+                        const auto request=formControls_.BuildRequest(control,currentUrl_);
+                        if(!request.url.empty())
+                            Navigate(request.url,true,request.body,request.post);
+                        else SetStatus(L"No se pudo construir la solicitud del formulario.");
                     }
                 }
                 return 0;

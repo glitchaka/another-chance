@@ -226,14 +226,17 @@ void NativeFormControls::Reposition(const RECT& viewport,int scroll) {
         }
     }
 }
-std::wstring NativeFormControls::SubmitGet(HWND initiator,
-                                            std::wstring_view pageUrl) const {
+FormRequest NativeFormControls::BuildRequest(HWND initiator,
+                                              std::wstring_view pageUrl) const {
     const Field* sender=Find(initiator);
     if(!sender) return {};
     const html::Node* form=ParentForm(sender->node);
     if(!form) return {};
-    const std::string method=form->Attribute("method");
-    if(!method.empty() && method!="get" && method!="GET") return {};
+    std::string method=form->Attribute("method");
+    std::transform(method.begin(),method.end(),method.begin(),
+        [](unsigned char c){return static_cast<char>(std::tolower(c));});
+    if(!method.empty() && method!="get" && method!="post") return {};
+    const bool post=method=="post";
     const std::string action=form->Attribute("action");
     std::wstring result=action.empty() ? std::wstring(pageUrl) :
         url::Resolve(pageUrl,url::ToWide(action));
@@ -267,11 +270,12 @@ std::wstring NativeFormControls::SubmitGet(HWND initiator,
         query+=Escape(value);
         if(query.size()>16384) return {};
     }
+    if(post) return {result,url::ToUtf8(query),true};
     if(!query.empty()) {
         result+=result.find(L'?')==std::wstring::npos?L'?':L'&';
         result+=query;
     }
-    return result;
+    return {result,{},false};
 }
 void NativeFormControls::ResetForm(HWND initiator) {
     const auto* sender=Find(initiator);

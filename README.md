@@ -135,3 +135,8 @@ El layout crea una lista separada de ubicaciones de controles `<input>`, `<texta
 ## Formularios HTML nativos
 
 Las etiquetas `input`, `textarea`, `button` y `select` ahora se dibujan mediante controles Win32 propios y son editables. Se conservan sus valores al desplazar y recalcular el layout, se incluye la información de campos `hidden` al enviar GET y se implementan los botones submit/reset. Enter en un campo de texto también solicita el envío. El motor todavía no implementa POST, cookies de sesión completas, eventos de JavaScript ni todos los requisitos HTML5.
+
+
+## Formularios POST
+
+El módulo `forms` ahora distingue el método HTTP `GET` de `POST` y transmite los campos como `application/x-www-form-urlencoded; charset=UTF-8` mediante un método POST propio del cliente WinHTTP. La navegación registra la URL de destino y envía el cuerpo en el trabajo de red. Sigue faltando el manejo completo de multipart/form-data, subida de archivos y estado de sesión de sitios modernos.
