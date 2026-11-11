@@ -196,7 +196,7 @@ public:
     }
     void ClickLink() {
         // First inline link at document (22,18) + 59px toolbar.
-        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 108));
+        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 84));
     }
     void Back() {
         PostMessageW(window_, WM_COMMAND, MAKEWPARAM(101, BN_CLICKED), 0);
