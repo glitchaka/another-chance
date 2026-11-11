@@ -72,3 +72,7 @@ Se revisaron las fuentes de KDE Breeze (`kdecoration/breeze.h`), GNOME libadwait
 Se distingue entre una dirección y una búsqueda, sin incorporar motores de otros navegadores.
 Las direcciones `https://sitio.cl`, `sitio.cl`, `sitio.cl/ruta`, `localhost:8080` y `127.0.0.1:8080` se normalizan automáticamente (HTTPS por defecto para dominios; HTTP para la red local).
 Las palabras o frases sin dirección se envían al buscador configurado en el menú: Google (predeterminado), Bing o búsqueda desactivada. El servicio de búsqueda es externo y recibe los términos; **el motor de representación de páginas continúa siendo propio y experimental**, sin JavaScript ni compatibilidad CSS moderna. La selección del buscador no persiste tras cerrar.
+
+## Icono de aplicación
+
+El ejecutable incorpora el recurso ICON (ID 101) en `assets/anotherchance.ico`, con tamaños 16/24/32/48/64/128/256. Win32 lo carga como icono grande y pequeño de la clase; Windows Explorer y la barra de tareas reciben el icono incrustado en el .exe. El icono es una identidad geométrica original de Another Chance (fondo azul profundo, flecha circular verde agua y una A blanca). La prueba `BrowserEndToEnd` verifica que el EXE tenga un icono real y que la ventana registre su HICON.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AnotherChance VERSION 0.1.0 LANGUAGES CXX)
+project(AnotherChance VERSION 0.1.0 LANGUAGES CXX RC)
 # Bundle MSVC CRT so the Release EXE runs without installing VC++ Redistributable.
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -10,6 +10,7 @@ if(NOT WIN32)
 endif()
 
 add_executable(AnotherChance WIN32
+    src/resources/app.rc
     src/main.cpp
     src/util/Url.cpp
     src/net/HttpClient.cpp
@@ -53,7 +54,7 @@ if(BUILD_TESTING)
     add_executable(AnotherChanceSmoke tests/BrowserSmoke.cpp)
     target_compile_features(AnotherChanceSmoke PRIVATE cxx_std_20)
     target_compile_definitions(AnotherChanceSmoke PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(AnotherChanceSmoke PRIVATE ws2_32 user32)
+    target_link_libraries(AnotherChanceSmoke PRIVATE ws2_32 user32 shell32)
     if(MSVC)
         target_compile_options(AnotherChanceSmoke PRIVATE /W4 /permissive- /utf-8 /EHsc)
     endif()

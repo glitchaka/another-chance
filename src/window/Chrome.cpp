@@ -156,9 +156,13 @@ void Draw(HDC dc,int width,int height,const std::vector<Tab>& tabs,
 
     const Geometry geom=Measure(width);
     // Compact application identity, no oversized monogram.
-    SolidBrush accent(kAccent);
-    g.FillEllipse(&accent,16,24,7,7);
-    Text(g,L"Another Chance",RectF(30,11,105,34),13,kInk,true);
+    Rounded(g, RectF(12.0f, 12.0f, 31.0f, 31.0f), 7.0f,
+            Color(255, 22, 43, 64));
+    // Brand glyph echoes the actual embedded icon at compact sizes.
+    Stroke(g, Color(255,250,253,255),2.7f,PointF(22.0f,35.0f),PointF(27.5f,20.0f));
+    Stroke(g, Color(255,250,253,255),2.7f,PointF(27.5f,20.0f),PointF(33.0f,35.0f));
+    Stroke(g, Color(255,250,253,255),2.4f,PointF(23.8f,30.0f),PointF(31.2f,30.0f));
+    Text(g,L"Another Chance",RectF(49,11,87,34),12,kInk,true);
 
     Arrow(g,155,28,true,canBack?kInk:kDim);
     Arrow(g,189,28,false,canForward?kInk:kDim);

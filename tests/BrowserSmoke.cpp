@@ -332,6 +332,21 @@ int wmain(int argc, wchar_t** argv) {
         {
         BrowserProcess browser(argv[1], page);
         Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
+        HICON extractedLarge = nullptr;
+        HICON extractedSmall = nullptr;
+        const UINT icons = ExtractIconExW(argv[1], 0, &extractedLarge, &extractedSmall, 1);
+        Check(icons == 1 && extractedLarge != nullptr && extractedSmall != nullptr,
+              "Executable does not contain a real Windows icon resource");
+        if (extractedLarge) DestroyIcon(extractedLarge);
+        if (extractedSmall) DestroyIcon(extractedSmall);
+        HICON windowIcon = reinterpret_cast<HICON>(
+            SendMessageW(browser.Window(), WM_GETICON, ICON_SMALL, 0));
+        if (!windowIcon) {
+            windowIcon = reinterpret_cast<HICON>(
+                GetClassLongPtrW(browser.Window(), GCLP_HICONSM));
+        }
+        Check(windowIcon != nullptr, "Window/taskbar icon is missing");
+        std::cout << "PASS: icon embedded in EXE and registered on GUI window\n";
         const LONG_PTR style = GetWindowLongPtrW(browser.Window(), GWL_STYLE);
         Check((style & WS_CAPTION) == 0, "Unexpected native Windows caption");
         Check((style & WS_POPUP) == WS_POPUP, "Expected popup-style frameless window");

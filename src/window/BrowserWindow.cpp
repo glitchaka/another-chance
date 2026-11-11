@@ -84,6 +84,11 @@ HWND BrowserWindow::Create(HINSTANCE instance, std::wstring initialUrl) {
     wc.lpfnWndProc = &BrowserWindow::StaticProc;
     wc.hInstance = instance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    // Icons embedded in the executable resource, not a runtime placeholder.
+    wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(101));
+    wc.hIconSm = reinterpret_cast<HICON>(
+        LoadImageW(instance, MAKEINTRESOURCEW(101), IMAGE_ICON,
+                   16, 16, LR_SHARED));
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wc.lpszClassName = kClassName;
     wc.style = CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW;
