@@ -7,9 +7,10 @@
 
 namespace ac::chrome {
 
-constexpr int kTabStripHeight = 45;
-constexpr int kToolbarHeight = 105;
-constexpr int kStatusHeight = 25;
+// One integrated workspace header: no Chromium-style tab strip or system caption.
+constexpr int kToolbarHeight = 78;
+constexpr int kStatusHeight = 23;
+constexpr WORD kTabCommandBase = 300;
 
 struct Tab {
     std::wstring title;
@@ -17,27 +18,31 @@ struct Tab {
 };
 
 enum class Action {
-    None, Back, Forward, Reload, Home,
-    Bookmark, Menu, AddTab, SelectTab, CloseTab
+    None, Back, Forward, Reload, Home, Bookmark,
+    TabMenu, Menu, Minimize, Maximize, Close
 };
-
 struct Hit {
     Action action = Action::None;
-    size_t tab = 0;
 };
 
 struct Geometry {
     RECT address{};
+    RECT back{};
+    RECT forward{};
+    RECT reload{};
+    RECT home{};
     RECT bookmark{};
+    RECT tabs{};
     RECT menu{};
-    RECT plus{};
-    int tabWidth = 210;
+    RECT minimize{};
+    RECT maximize{};
+    RECT close{};
 };
 
-[[nodiscard]] Geometry Measure(int width, size_t tabCount);
-[[nodiscard]] Hit HitTest(int x, int y, int width, size_t tabCount);
+[[nodiscard]] Geometry Measure(int width);
+[[nodiscard]] Hit HitTest(int x, int y, int width);
+[[nodiscard]] bool IsDraggable(int x, int y, int width);
 void Draw(HDC dc, int width, int height, const std::vector<Tab>& tabs,
           size_t activeTab, bool canBack, bool canForward,
-          bool bookmarked, bool loading);
-
+          bool bookmarked, bool loading, bool maximized);
 } // namespace ac::chrome
