@@ -205,10 +205,19 @@ Document Parse(std::string_view input) {
         }
         i = p < input.size() ? p + 1 : input.size();
         Node* element = node.get();
-        // HTML5 permits some closing tags to be omitted. Without this,
-        // the body of a real site may incorrectly remain inside <head>,
-        // inheriting display:none and producing an entirely white screen.
-        if (element->tag == "body") {
+        // HTML error recovery: auto-close <head> before body content even
+        // when the page omits an explicit <body> tag. Without this, all later
+        // elements inherit the hidden HEAD style and the viewport stays white.
+        const auto& tag = element->tag;
+        const bool bodyContent = tag == "body" || tag == "main" ||
+            tag == "header" || tag == "footer" || tag == "nav" ||
+            tag == "section" || tag == "article" || tag == "aside" ||
+            tag == "div" || tag == "p" || tag == "h1" || tag == "h2" ||
+            tag == "h3" || tag == "h4" || tag == "h5" ||
+            tag == "h6" || tag == "img" || tag == "form" ||
+            tag == "table" || tag == "ul" || tag == "ol" ||
+            tag == "a" || tag == "center";
+        if (bodyContent) {
             OpenElement* head = open.Peek();
             while (head && head->node != document.root.get() &&
                    head->node->tag != "head") {

@@ -235,6 +235,19 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, visible, sheet, images, url, 400);
     Check(layout.HasVisibleContent(),
           "visible HTML content must not be treated as blank");
+    // HTML5 documents may omit </head> and <body>. The first actual body
+    // element must not remain inside a hidden HEAD subtree.
+    auto implicitBody = ac::html::Parse(
+        "<!doctype html><html><head><title>Sin cerrar</title>"
+        "<meta charset='utf-8'><main><h1>Texto visible</h1></main></html>");
+    layout.Reflow(dc, implicitBody, sheet, images, url, 400);
+    Check(layout.HasVisibleContent(),
+          "implicit close of HEAD must preserve main content");
+    auto malformedDiv = ac::html::Parse(
+        "<html><head><title>Sin cerrar</title><div>Visible</div>");
+    layout.Reflow(dc, malformedDiv, sheet, images, url, 400);
+    Check(layout.HasVisibleContent(),
+          "missing body/head close cannot hide all content");
     auto noScript = ac::html::Parse(
         "<html><body><noscript>Este sitio requiere JavaScript.</noscript>"
         "</body></html>");
