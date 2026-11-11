@@ -7,225 +7,195 @@
 #include <cmath>
 #include <string>
 
+// Compact, original Win32 toolbar.
+// Spacing and restrained color treatment informed by the public style sources
+// for KDE Breeze, GNOME libadwaita and Linux Mint Mint-Y.
+// No GTK, Qt, KDE, Cinnamon or third-party browser engine is linked or copied.
+
 namespace ac::chrome {
 namespace {
 using namespace Gdiplus;
+const Color kSurface(255, 249, 250, 252);
+const Color kPaper(255, 255, 255, 255);
+const Color kInk(255, 54, 62, 74);
+const Color kDim(255, 129, 141, 153);
+const Color kEdge(255, 219, 224, 231);
+const Color kAccent(255, 60, 119, 185);
+const Color kAccentSoft(255, 240, 246, 252);
+const Color kDanger(255, 193, 67, 72);
 
-// Custom chrome belongs entirely to Another Chance, not the OS or a web engine.
-const Color kHeader(255, 232, 241, 247);
-const Color kSurface(255, 251, 253, 255);
-const Color kText(255, 31, 51, 71);
-const Color kMuted(255, 99, 121, 138);
-const Color kBorder(255, 209, 227, 235);
-const Color kTeal(255, 19, 141, 144);
-const Color kLightTeal(255, 225, 245, 241);
-const Color kAmber(255, 218, 147, 59);
-const Color kDanger(255, 207, 70, 77);
-
-RECT Area(int x, int y, int w, int h) { return {x,y,x+w,y+h}; }
-bool Contains(RECT r, int x, int y) {
+RECT Area(int x, int y, int w, int h) { return {x, y, x+w, y+h}; }
+bool Contains(const RECT& r, int x, int y) {
     return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
 }
-void Stroke(Graphics& g, const Color& color, float size, PointF a, PointF b) {
-    Pen pen(color, size);
+void Stroke(Graphics& g, const Color& c, float thickness, PointF a, PointF b) {
+    Pen pen(c, thickness);
     pen.SetStartCap(LineCapRound);
     pen.SetEndCap(LineCapRound);
     g.DrawLine(&pen, a, b);
 }
-void Rounded(Graphics& g, RectF r, float radius, const Color& fill,
-             const Color* border = nullptr) {
+void Rounded(Graphics& g, const RectF& r, float radius,
+             const Color& fill, const Color* border=nullptr) {
     GraphicsPath path;
-    const float d = radius * 2.0f;
-    path.AddArc(r.X,r.Y,d,d,180.0f,90.0f);
-    path.AddArc(r.GetRight()-d,r.Y,d,d,270.0f,90.0f);
-    path.AddArc(r.GetRight()-d,r.GetBottom()-d,d,d,0.0f,90.0f);
-    path.AddArc(r.X,r.GetBottom()-d,d,d,90.0f,90.0f);
+    const float d=radius*2;
+    path.AddArc(r.X, r.Y, d, d, 180.0f, 90.0f);
+    path.AddArc(r.GetRight()-d, r.Y, d, d, 270.0f, 90.0f);
+    path.AddArc(r.GetRight()-d, r.GetBottom()-d, d, d, 0.0f, 90.0f);
+    path.AddArc(r.X, r.GetBottom()-d, d, d, 90.0f, 90.0f);
     path.CloseFigure();
     SolidBrush brush(fill);
-    g.FillPath(&brush,&path);
-    if (border) {
-        Pen edge(*border,1.0f);
-        g.DrawPath(&edge,&path);
-    }
+    g.FillPath(&brush, &path);
+    if(border){Pen pen(*border, 1.0f);g.DrawPath(&pen, &path);}
 }
-void Label(Graphics& g, const wchar_t* text, float x, float y,
-           float w, float h, float size, const Color& color, bool bold = false) {
+void Text(Graphics& g, const std::wstring& str, const RectF& r,
+          float size, const Color& color, bool bold=false) {
     FontFamily family(L"Segoe UI");
-    Font font(&family,size,bold?FontStyleBold:FontStyleRegular,UnitPixel);
+    Font font(&family, size, bold?FontStyleBold:FontStyleRegular, UnitPixel);
     SolidBrush brush(color);
     StringFormat format;
     format.SetLineAlignment(StringAlignmentCenter);
     format.SetFormatFlags(StringFormatFlagsNoWrap);
     format.SetTrimming(StringTrimmingEllipsisCharacter);
-    g.DrawString(text,-1,&font,RectF(x,y,w,h),&format,&brush);
+    g.DrawString(str.c_str(), -1, &font, r, &format, &brush);
 }
-void Back(Graphics& g,int x,int y,const Color& color) {
-    Stroke(g,color,2.0f,PointF(x+7.0f,y),PointF(x-6.0f,y));
-    Stroke(g,color,2.0f,PointF(x-6.0f,y),PointF(x+1.0f,y-7.0f));
-    Stroke(g,color,2.0f,PointF(x-6.0f,y),PointF(x+1.0f,y+7.0f));
+void Arrow(Graphics& g, int x, int y, bool backward, const Color& c) {
+    const float d=backward?-1.0f:1.0f;
+    Stroke(g,c,1.7f,PointF(x-d*6,y),PointF(x+d*6,y));
+    Stroke(g,c,1.7f,PointF(x-d*6,y),PointF(x,y-6));
+    Stroke(g,c,1.7f,PointF(x-d*6,y),PointF(x,y+6));
 }
-void Forward(Graphics& g,int x,int y,const Color& color) {
-    Stroke(g,color,2.0f,PointF(x-7.0f,y),PointF(x+6.0f,y));
-    Stroke(g,color,2.0f,PointF(x+6.0f,y),PointF(x-1.0f,y-7.0f));
-    Stroke(g,color,2.0f,PointF(x+6.0f,y),PointF(x-1.0f,y+7.0f));
+void Reload(Graphics& g, int x, int y) {
+    Pen pen(kInk,1.7f);
+    g.DrawArc(&pen,x-7,y-7,14,14,52,295);
+    Stroke(g,kInk,1.7f,PointF(x+7.0f,y-4.0f),PointF(x+7.0f,y+3.0f));
+    Stroke(g,kInk,1.7f,PointF(x+7.0f,y+3.0f),PointF(x+2.0f,y));
 }
-void Reload(Graphics& g,int x,int y) {
-    Pen pen(kMuted,2.0f);
-    pen.SetStartCap(LineCapRound);
-    pen.SetEndCap(LineCapRound);
-    g.DrawArc(&pen,x-9,y-9,18,18,65,285);
-    Stroke(g,kMuted,2.0f,PointF(x+9.0f,y-4.0f),PointF(x+9.0f,y+3.0f));
-    Stroke(g,kMuted,2.0f,PointF(x+9.0f,y+3.0f),PointF(x+3.0f,y));
-}
-void Star(Graphics& g,int x,int y,bool filled) {
-    constexpr double pi = 3.141592653589793;
+void Star(Graphics& g, int x, int y, bool filled) {
+    constexpr double pi=3.14159265358979323846;
     std::array<PointF,10> pts{};
-    for(int i=0;i<10;++i) {
-        const double a = -pi/2.0+i*pi/5.0;
-        const double radius = (i%2==0)?9.0:4.2;
-        pts[static_cast<size_t>(i)] = PointF(
-            static_cast<REAL>(x+std::cos(a)*radius),
-            static_cast<REAL>(y+std::sin(a)*radius));
+    for(int i=0;i<10;++i){
+        const double a=-pi/2+i*pi/5;
+        const double r=i%2==0?8.0:3.8;
+        pts[static_cast<size_t>(i)]=PointF(
+            static_cast<REAL>(x+cos(a)*r),
+            static_cast<REAL>(y+sin(a)*r));
     }
-    Pen pen(kAmber,1.8f);
+    Pen pen(kInk,1.4f);
     g.DrawPolygon(&pen,pts.data(),static_cast<INT>(pts.size()));
-    if (filled) {
-        SolidBrush brush(kAmber);
-        g.FillPolygon(&brush,pts.data(),static_cast<INT>(pts.size()));
-    }
+    if(filled){SolidBrush b(kAccent);g.FillPolygon(&b,pts.data(),
+                                      static_cast<INT>(pts.size()));}
 }
-void Cross(Graphics& g,int x,int y,const Color& c) {
-    Stroke(g,c,1.6f,PointF(x-5.0f,y-5.0f),PointF(x+5.0f,y+5.0f));
-    Stroke(g,c,1.6f,PointF(x+5.0f,y-5.0f),PointF(x-5.0f,y+5.0f));
+void Dots(Graphics& g, int x, int y) {
+    SolidBrush brush(kInk);
+    for(int i=-1;i<=1;++i)g.FillEllipse(&brush,x-1.5f,y+i*5.5f-1.5f,3.0f,3.0f);
 }
-void Minimize(Graphics& g,int x,int y) {
-    Stroke(g,kText,1.7f,PointF(x-7.0f,y+4.0f),PointF(x+7.0f,y+4.0f));
-}
-void Maximize(Graphics& g,int x,int y,bool maximized) {
-    Pen pen(kText,1.6f);
-    if (maximized) {
-        g.DrawRectangle(&pen,x-5,y-5,10,10);
-        Stroke(g,kText,1.5f,PointF(x-2.0f,y-8.0f),PointF(x+8.0f,y-8.0f));
-        Stroke(g,kText,1.5f,PointF(x+8.0f,y-8.0f),PointF(x+8.0f,y+2.0f));
-    } else {
-        g.DrawRectangle(&pen,x-6,y-6,12,12);
+void WindowIcon(Graphics& g, Action a, int x, int y, bool maximized) {
+    if(a==Action::Minimize){
+        Stroke(g,kInk,1.5f,PointF(x-5.0f,y+4.0f),PointF(x+5.0f,y+4.0f));
+    }else if(a==Action::Maximize){
+        Pen pen(kInk,1.4f);
+        if(maximized){
+            g.DrawRectangle(&pen,x-5,y-4,10,9);
+            Stroke(g,kInk,1.4f,PointF(x-2.0f,y-7.0f),PointF(x+7.0f,y-7.0f));
+            Stroke(g,kInk,1.4f,PointF(x+7.0f,y-7.0f),PointF(x+7.0f,y+2.0f));
+        } else g.DrawRectangle(&pen,x-5,y-5,10,10);
+    }else if(a==Action::Close){
+        Stroke(g,kDanger,1.7f,PointF(x-5.0f,y-5.0f),PointF(x+5.0f,y+5.0f));
+        Stroke(g,kDanger,1.7f,PointF(x-5.0f,y+5.0f),PointF(x+5.0f,y-5.0f));
     }
 }
 } // namespace
 
-Geometry Measure(int width) {
+Geometry Measure(int width){
     const int w=std::max(860,width);
     Geometry g;
-    g.back=Area(157,22,35,36);
-    g.forward=Area(197,22,35,36);
-    g.address=Area(247,17,std::max(200,w-247-361),44);
-    g.reload=Area(w-346,22,34,36);
-    g.bookmark=Area(w-308,22,34,36);
-    g.tabs=Area(w-268,21,95,38);
-    g.menu=Area(w-168,22,33,36);
-    g.minimize=Area(w-132,0,44,49);
-    g.maximize=Area(w-88,0,44,49);
-    g.close=Area(w-44,0,44,49);
-    g.home=Area(10,10,135,57);
+    g.home=Area(10,8,124,40);
+    g.back=Area(140,10,30,36);
+    g.forward=Area(174,10,30,36);
+    g.address=Area(215,10,std::max(150,w-215-309),36);
+    g.reload=Area(w-302,10,31,36);
+    g.bookmark=Area(w-268,10,31,36);
+    g.tabs=Area(w-231,10,67,36);
+    g.menu=Area(w-161,10,30,36);
+    g.minimize=Area(w-123,5,39,42);
+    g.maximize=Area(w-83,5,39,42);
+    g.close=Area(w-43,5,39,42);
     return g;
 }
-
-Hit HitTest(int x,int y,int width) {
-    if (y<0 || y>=kToolbarHeight) return {};
-    const Geometry g=Measure(width);
-    if(Contains(g.close,x,y)) return {Action::Close};
-    if(Contains(g.maximize,x,y)) return {Action::Maximize};
-    if(Contains(g.minimize,x,y)) return {Action::Minimize};
-    if(Contains(g.back,x,y)) return {Action::Back};
-    if(Contains(g.forward,x,y)) return {Action::Forward};
-    if(Contains(g.reload,x,y)) return {Action::Reload};
-    if(Contains(g.bookmark,x,y)) return {Action::Bookmark};
-    if(Contains(g.tabs,x,y)) return {Action::TabMenu};
-    if(Contains(g.menu,x,y)) return {Action::Menu};
-    if(Contains(g.home,x,y)) return {Action::Home};
+Hit HitTest(int x,int y,int width){
+    if(y<0||y>=kToolbarHeight)return {};
+    const auto g=Measure(width);
+    if(Contains(g.close,x,y))return {Action::Close};
+    if(Contains(g.maximize,x,y))return {Action::Maximize};
+    if(Contains(g.minimize,x,y))return {Action::Minimize};
+    if(Contains(g.back,x,y))return {Action::Back};
+    if(Contains(g.forward,x,y))return {Action::Forward};
+    if(Contains(g.reload,x,y))return {Action::Reload};
+    if(Contains(g.bookmark,x,y))return {Action::Bookmark};
+    if(Contains(g.tabs,x,y))return {Action::TabMenu};
+    if(Contains(g.menu,x,y))return {Action::Menu};
+    if(Contains(g.home,x,y))return {Action::Home};
     return {};
 }
-
-bool IsDraggable(int x,int y,int width) {
-    if(y<0 || y>=kToolbarHeight) return false;
-    const Geometry g=Measure(width);
-    if(Contains(g.address,x,y)) return false;
-    return HitTest(x,y,width).action==Action::None;
+bool IsDraggable(int x,int y,int width){
+    if(y<0||y>=kToolbarHeight)return false;
+    const auto g=Measure(width);
+    return !Contains(g.address,x,y) && HitTest(x,y,width).action==Action::None;
 }
-
 void Draw(HDC dc,int width,int height,const std::vector<Tab>& tabs,
           size_t activeTab,bool canBack,bool canForward,
-          bool bookmarked,bool loading,bool maximized) {
-    if(!dc) return;
-    Graphics graphics(dc);
-    Graphics& g=graphics;
+          bool bookmarked,bool loading,bool maximized){
+    if(!dc)return;
+    Graphics g(dc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-    const Geometry geometry=Measure(width);
-    SolidBrush header(kHeader);
-    g.FillRectangle(&header,0,0,width,kToolbarHeight);
-    Pen boundary(kBorder,1.0f);
-    g.DrawLine(&boundary,0,kToolbarHeight-1,width,kToolbarHeight-1);
+    SolidBrush surface(kSurface);
+    g.FillRectangle(&surface,0,0,width,kToolbarHeight);
+    Pen edge(kEdge,1);
+    g.DrawLine(&edge,0,kToolbarHeight-1,width,kToolbarHeight-1);
 
-    // Identity block: circular monogram + two-line wordmark, not a tab bar.
-    Rounded(g,RectF(15,17,43,43),13,kTeal);
-    Label(g,L"A",27,21,20,32,23,kSurface,true);
-    SolidBrush gold(kAmber);
-    g.FillEllipse(&gold,48,15,9,9);
-    Label(g,L"ANOTHER",66,18,87,21,13,kText,true);
-    Label(g,L"CHANCE",66,38,87,19,11,kMuted,true);
+    const Geometry geom=Measure(width);
+    // Compact application identity, no oversized monogram.
+    SolidBrush accent(kAccent);
+    g.FillEllipse(&accent,16,24,7,7);
+    Text(g,L"Another Chance",RectF(30,11,105,34),13,kInk,true);
 
-    const Color disabled(255,162,179,190);
-    Back(g,175,40,canBack?kText:disabled);
-    Forward(g,215,40,canForward?kText:disabled);
+    Arrow(g,155,28,true,canBack?kInk:kDim);
+    Arrow(g,189,28,false,canForward?kInk:kDim);
 
-    const auto& a=geometry.address;
+    const RECT a=geom.address;
     Rounded(g,RectF(static_cast<REAL>(a.left),static_cast<REAL>(a.top),
                     static_cast<REAL>(a.right-a.left),static_cast<REAL>(a.bottom-a.top)),
-            13,kSurface,&kBorder);
-    // Custom compass marker; not the padlock/omnibox symbolism of Chromium.
-    SolidBrush circle(kLightTeal);
-    g.FillEllipse(&circle,a.left+12,27,23,23);
-    Stroke(g,kTeal,1.6f,PointF(static_cast<REAL>(a.left+24),31),
-           PointF(static_cast<REAL>(a.left+24),47));
-    Stroke(g,kTeal,1.6f,PointF(static_cast<REAL>(a.left+17),39),
-           PointF(static_cast<REAL>(a.left+31),39));
+            8,kPaper,&kEdge);
+    // Address text is an actual Win32 EDIT child. No decorative symbol inside.
 
-    Reload(g,geometry.reload.left+17,40);
-    Star(g,geometry.bookmark.left+17,40,bookmarked);
+    Reload(g,geom.reload.left+15,28);
+    Star(g,geom.bookmark.left+15,28,bookmarked);
 
-    const auto& tb=geometry.tabs;
-    Rounded(g,RectF(static_cast<REAL>(tb.left),static_cast<REAL>(tb.top),
-                    static_cast<REAL>(tb.right-tb.left),static_cast<REAL>(tb.bottom-tb.top)),
-            11,kLightTeal);
-    const auto count=std::to_wstring(tabs.size());
-    Label(g,L"VISTAS",tb.left+10.0f,tb.top+2.0f,45,32,10,kTeal,true);
-    Label(g,count.c_str(),tb.left+58.0f,tb.top+2.0f,18,32,15,kText,true);
-    Stroke(g,kTeal,1.5f,PointF(tb.right-14.0f,37),
-           PointF(tb.right-10.0f,41));
-    Stroke(g,kTeal,1.5f,PointF(tb.right-10.0f,41),
-           PointF(tb.right-6.0f,37));
+    const auto& tabsArea=geom.tabs;
+    Rounded(g,RectF(static_cast<REAL>(tabsArea.left),static_cast<REAL>(tabsArea.top),
+                    static_cast<REAL>(tabsArea.right-tabsArea.left),
+                    static_cast<REAL>(tabsArea.bottom-tabsArea.top)),
+            7,kAccentSoft);
+    Text(g,std::to_wstring(tabs.size()),
+         RectF(static_cast<REAL>(tabsArea.left+13),12,20,31),13,kInk,true);
+    Stroke(g,kDim,1.4f,PointF(tabsArea.right-22.0f,24.0f),
+                            PointF(tabsArea.right-17.0f,29.0f));
+    Stroke(g,kDim,1.4f,PointF(tabsArea.right-17.0f,29.0f),
+                            PointF(tabsArea.right-12.0f,24.0f));
+    Dots(g,geom.menu.left+15,28);
 
-    const int mx=geometry.menu.left+17;
-    for(int i=-1;i<=1;++i) {
-        SolidBrush point(kMuted);
-        g.FillEllipse(&point,mx-2,38+i*7,4,4);
-    }
-    Minimize(g,geometry.minimize.left+22,25);
-    Maximize(g,geometry.maximize.left+22,25,maximized);
-    // Distinctive custom close surface; no Windows caption is drawn.
-    Rounded(g,RectF(static_cast<REAL>(geometry.close.left+6),10,31,32),
-            9,Color(255,249,225,225));
-    Cross(g,geometry.close.left+22,26,kDanger);
-
+    WindowIcon(g,Action::Minimize,geom.minimize.left+19,26,maximized);
+    WindowIcon(g,Action::Maximize,geom.maximize.left+19,26,maximized);
+    WindowIcon(g,Action::Close,geom.close.left+19,26,maximized);
     if(loading) {
-        SolidBrush progress(kTeal);
-        g.FillRectangle(&progress,0,kToolbarHeight-3,std::max(30,width/3),3);
+        SolidBrush progress(kAccent);
+        g.FillRectangle(&progress,0,kToolbarHeight-2,std::max(20,width/4),2);
     }
-    SolidBrush footer(Color(255,248,251,253));
+    SolidBrush footer(Color(255,250,251,252));
     g.FillRectangle(&footer,0,std::max(kToolbarHeight,height-kStatusHeight),
                     width,kStatusHeight);
-    g.DrawLine(&boundary,0,height-kStatusHeight,width,height-kStatusHeight);
-    (void)activeTab;
+    g.DrawLine(&edge,0,height-kStatusHeight,width,height-kStatusHeight);
+    (void)tabs;(void)activeTab;
 }
 } // namespace ac::chrome

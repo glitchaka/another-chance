@@ -8,7 +8,7 @@
 namespace ac::chrome {
 
 // One integrated workspace header: no Chromium-style tab strip or system caption.
-constexpr int kToolbarHeight = 78;
+constexpr int kToolbarHeight = 56;
 constexpr int kStatusHeight = 23;
 constexpr WORD kTabCommandBase = 300;
 

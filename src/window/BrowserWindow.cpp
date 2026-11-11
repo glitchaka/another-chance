@@ -553,10 +553,10 @@ void BrowserWindow::Resize(int width, int height) {
     clientHeight_ = std::max(1, height);
     const auto geometry = chrome::Measure(clientWidth_);
     if (address_) {
-        MoveWindow(address_, geometry.address.left + 42, 25,
+        MoveWindow(address_, geometry.address.left + 11, 14,
                    std::max(70, static_cast<int>(geometry.address.right -
-                                                geometry.address.left - 54)),
-                   26, TRUE);
+                                                geometry.address.left - 22)),
+                   27, TRUE);
     }
     if (status_) {
         MoveWindow(status_, 15, std::max(kToolbarHeight, clientHeight_ - kStatusHeight + 5),

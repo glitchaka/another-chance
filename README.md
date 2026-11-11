@@ -61,3 +61,7 @@ Este estado es intencionadamente explícito para no confundir una prueba de comp
 ## Repintado y desplazamiento
 
 La rueda del ratón invalida exclusivamente el rectángulo del documento y conserva los incrementos parciales de dispositivos de alta resolución. La superficie afectada se dibuja primero en un bitmap compatible y se copia al cliente en una sola operación. La cabecera solo se vuelve a dibujar cuando cambia su propio estado o el tamaño de la ventana; esto elimina el repintado completo innecesario que producía parpadeo al desplazarse.
+
+## Referencias de estilo verificadas
+
+Se revisaron las fuentes de KDE Breeze (`kdecoration/breeze.h`), GNOME libadwaita (`src/stylesheet/widgets/_header-bar.scss`) y Linux Mint Mint-Y (`src/Mint-Y/gtk-3.0/gtk.css`). El encabezado propietario de Another Chance se redujo de 78 a 56 píxeles, eliminó el símbolo decorativo dentro de la barra de dirección, el monograma grande y los botones coloreados, y emplea márgenes compactos y colores neutros. Son referencias de diseño, no dependencias ni código copiado de dichos proyectos.
