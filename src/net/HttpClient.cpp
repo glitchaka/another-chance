@@ -33,6 +33,25 @@ std::wstring QueryStringHeader(HINTERNET request, DWORD flag) {
 } // namespace
 
 Response HttpClient::Get(const std::wstring& url, size_t maxBytes) const {
+    return Request(url,L"GET",{},maxBytes);
+}
+
+Response HttpClient::Post(const std::wstring& url,
+                          const std::string& urlEncodedBody,
+                          size_t maxBytes) const {
+    if (urlEncodedBody.size() > 64 * 1024) {
+        Response rejected;
+        rejected.url = url;
+        rejected.error = L"El formulario supera el límite de envío.";
+        return rejected;
+    }
+    return Request(url,L"POST",urlEncodedBody,maxBytes);
+}
+
+Response HttpClient::Request(const std::wstring& url,
+                             const wchar_t* method,
+                             const std::string& urlEncodedBody,
+                             size_t maxBytes) const {
     Response response;
     response.url = url;
     if (!ac::url::IsWeb(url)) {
@@ -81,7 +100,7 @@ Response HttpClient::Get(const std::wstring& url, size_t maxBytes) const {
     }
 
     const bool secure = components.nScheme == INTERNET_SCHEME_HTTPS;
-    InternetHandle request(WinHttpOpenRequest(connection, L"GET", path.c_str(),
+    InternetHandle request(WinHttpOpenRequest(connection, method, path.c_str(),
         nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
         secure ? WINHTTP_FLAG_SECURE : 0));
     if (!request.handle) {
@@ -93,11 +112,18 @@ Response HttpClient::Get(const std::wstring& url, size_t maxBytes) const {
                           WINHTTP_DECOMPRESSION_FLAG_DEFLATE;
     WinHttpSetOption(request, WINHTTP_OPTION_DECOMPRESSION,
                      &decompression, sizeof(decompression));
-    constexpr wchar_t headers[] =
+    std::wstring headers =
         L"Accept: text/html,application/xhtml+xml,text/plain,*/*;q=0.5\r\n"
         L"Accept-Language: es-CL,es;q=0.9,en;q=0.6\r\n";
-    if (!WinHttpSendRequest(request, headers, static_cast<DWORD>(-1L),
-                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+    const bool post = std::wstring_view(method) == L"POST";
+    if (post) headers +=
+        L"Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n";
+    LPVOID body = post && !urlEncodedBody.empty() ?
+        const_cast<char*>(urlEncodedBody.data()) : WINHTTP_NO_REQUEST_DATA;
+    const DWORD bytes = post ? static_cast<DWORD>(urlEncodedBody.size()) : 0;
+    if (!WinHttpSendRequest(request, headers.c_str(),
+                            static_cast<DWORD>(-1L),
+                            body, bytes, bytes, 0) ||
         !WinHttpReceiveResponse(request, nullptr)) {
         response.error = ErrorCode(L"Error al solicitar la página");
         return response;
