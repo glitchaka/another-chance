@@ -601,8 +601,13 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     SetWindowTextW(hwnd_, (title.empty() ? L"Another Chance" :
         title + L" — Another Chance").c_str());
     if (result->response.Ok()) {
-        SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
-                  L"  |  Motor de páginas original (sin JavaScript)");
+        if (!layout_.HasVisibleContent()) {
+            SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
+                      L" | Sin contenido representable (JS/CSS no admitido)");
+        } else {
+            SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
+                      L" | Motor de páginas original (sin JavaScript)");
+        }
     } else {
         SetStatus(result->response.error);
     }
@@ -618,7 +623,10 @@ void BrowserWindow::OnStyleReady(LoadedStyle* raw) {
     document_->embeddedCss.append(style->css);
     sheet_.Parse(document_->embeddedCss);
     Reflow();
-    InvalidateRect(hwnd_, nullptr, FALSE);
+    if (!layout_.HasVisibleContent()) {
+        SetStatus(L"Sin contenido representable (JS/CSS no admitido)");
+    }
+    InvalidateContent();
 }
 
 void BrowserWindow::OnImageReady(LoadedImage* raw) {
@@ -635,8 +643,33 @@ void BrowserWindow::DrawContent(HDC dc) {
     HBRUSH paper = CreateSolidBrush(RGB(255, 255, 255));
     FillRect(dc, &view, paper);
     DeleteObject(paper);
-    if (document_) {
+    if (document_ && layout_.HasVisibleContent()) {
         layout_.Draw(dc, view.top, scrollY_, view);
+    } else if (document_) {
+        // A successful HTTP response can still contain no renderable content
+        // (for example, a JS-only application shell). Never display a silent
+        // white screen that suggests the page finished rendering correctly.
+        const RECT heading{view.left + 28, view.top + 30,
+                           view.right - 28, view.top + 78};
+        HFONT font = CreateFontW(-27, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE,
+                                FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                                CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                DEFAULT_PITCH, L"Segoe UI");
+        HGDIOBJ previous = font ? SelectObject(dc, font) : nullptr;
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(49, 62, 80));
+        DrawTextW(dc, L"No se pudo representar esta página", -1,
+                  const_cast<RECT*>(&heading), DT_LEFT | DT_SINGLELINE);
+        if (font) { SelectObject(dc, previous); DeleteObject(font); }
+        RECT message{view.left + 29, view.top + 100,
+                     view.right - 29, view.top + 260};
+        SetTextColor(dc, RGB(91, 104, 119));
+        DrawTextW(dc,
+            L"El sitio respondió, pero el motor HTML/CSS no encontró "
+            L"contenido visible que pudiera mostrar. Puede requerir "
+            L"JavaScript u otras funciones web todavía no implementadas. "
+            L"No significa que la página esté vacía en otros navegadores.",
+            -1, &message, DT_LEFT | DT_WORDBREAK);
     }
 }
 

@@ -271,6 +271,17 @@ void PageLayout::Reflow(HDC dc, const html::Document& document,
     height_ = y_ + lineHeight_ + 24;
 }
 
+bool PageLayout::HasVisibleContent() const {
+    for (const Item& item : items_) {
+        if (item.kind == Item::Kind::Image ||
+            item.kind == Item::Kind::Rule ||
+            (item.kind == Item::Kind::Text && !item.text.empty())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
     const int saved = SaveDC(dc);
     IntersectClipRect(dc, viewport.left, viewport.top, viewport.right, viewport.bottom);

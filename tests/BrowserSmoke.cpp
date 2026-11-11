@@ -107,6 +107,11 @@ private:
                             std::to_string(i) + "</p>";
                     }
                     body += "</body></html>";
+                } else if (request.find("GET /js-only ") != std::string::npos) {
+                    body = "<!doctype html><html><head><title>Aplicación JS</title>"
+                           "<style>#root{display:none}</style></head><body>"
+                           "<div id='root'></div><script>document.body.innerHTML='contenido';"
+                           "</script></body></html>";
                 } else if (request.find("GET /next ") != std::string::npos) {
                     ++nextRequests;
                     body = "<html><head><title>Destino de prueba</title></head><body><h1>Correcto</h1></body></html>";
@@ -188,6 +193,13 @@ public:
         wchar_t title[512]{};
         GetWindowTextW(window_, title, 512);
         return std::wstring_view(title).find(expected) != std::wstring_view::npos;
+    }
+    bool StatusContains(std::wstring_view text) const {
+        HWND label = FindWindowExW(window_, nullptr, L"Static", nullptr);
+        if (!label) return false;
+        wchar_t status[1024]{};
+        GetWindowTextW(label, status, 1024);
+        return std::wstring_view(status).find(text) != std::wstring_view::npos;
     }
     bool HasHttp200() const {
         HWND label = FindWindowExW(window_, nullptr, L"Static", nullptr);
@@ -416,6 +428,8 @@ int wmain(int argc, wchar_t** argv) {
             server.htmlRequests.load() >= 3; }, 14000),
               "Switching back to first tab did not restore navigation");
         std::cout << "PASS: switch tab and restore previous URL\n";
+        // A second real GUI process opens a JS-only page: it must display
+        // an explicit unsupported-page status rather than silent white.
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';

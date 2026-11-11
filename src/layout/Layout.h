@@ -24,6 +24,7 @@ public:
     void Draw(HDC dc, int top, int scroll, const RECT& viewport);
     [[nodiscard]] std::wstring LinkAt(int x, int y, int top, int scroll) const;
     [[nodiscard]] int Height() const { return height_; }
+    [[nodiscard]] bool HasVisibleContent() const;
 
 private:
     struct Item {
