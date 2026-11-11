@@ -576,6 +576,7 @@ void BrowserWindow::Reflow() {
     if (!document_ || !hwnd_) return;
     HDC dc = GetDC(hwnd_);
     if (!dc) return;
+    sheet_.Parse(document_->embeddedCss, clientWidth_);
     layout_.Reflow(dc, *document_, sheet_, images_, currentUrl_, clientWidth_);
     ReleaseDC(hwnd_, dc);
     scrollY_ = std::clamp(scrollY_, 0, MaxScroll());

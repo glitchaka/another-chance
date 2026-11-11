@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cmath>
+#include <functional>
 #include <string>
 #include <sstream>
 
@@ -93,7 +94,7 @@ std::vector<Sheet::Declaration> ParseDeclarations(std::string_view declarations)
 }
 } // namespace
 
-void Sheet::Parse(std::string_view css) {
+void Sheet::Parse(std::string_view css, int viewportWidth) {
     rules_.clear();
     std::string cleaned(css);
     size_t comment = 0;
@@ -102,56 +103,82 @@ void Sheet::Parse(std::string_view css) {
         if (end == std::string::npos) { cleaned.erase(comment); break; }
         cleaned.erase(comment, end - comment + 2);
     }
-    size_t i = 0;
-    while (i < cleaned.size() && rules_.size() < 5000) {
-        const auto opening = cleaned.find('{', i);
-        if (opening == std::string::npos) break;
-        const auto closing = cleaned.find('}', opening + 1);
-        if (closing == std::string::npos) break;
-        const auto decls = ParseDeclarations(
-            std::string_view(cleaned).substr(opening + 1, closing - opening - 1));
-        std::string selectors = cleaned.substr(i, opening - i);
-        size_t s = 0;
-        while (s < selectors.size()) {
-            const size_t comma = selectors.find(',', s);
-            const size_t end = comma == std::string::npos ? selectors.size() : comma;
-            auto selector = Lower(Trim(std::string_view(selectors).substr(s, end - s)));
-            if (!selector.empty() && selector[0] != '@') {
-                rules_.push_back({std::move(selector), decls});
-            }
-            if (comma == std::string::npos) break;
-            s = comma + 1;
-        }
-        i = closing + 1;
-    }
-}
 
-namespace {
-int CssPixels(std::string_view value, int fallback) {
-    std::string text(value);
-    char* tail = nullptr;
-    const float number = std::strtof(text.c_str(), &tail);
-    if (tail == text.c_str() || !std::isfinite(number)) return fallback;
-    if (*tail && std::string_view(tail) != "px") return fallback;
-    return std::clamp(static_cast<int>(number), 0, 8192);
+    // Observe basic responsive breakpoints. Layout is recomputed on resize.
+    auto mediaMatches = [viewportWidth](const std::string& header) {
+        const std::string query = Lower(header);
+        if (query.find("print") != std::string::npos &&
+            query.find("screen") == std::string::npos) return false;
+        if (query.find("prefers-color-scheme: dark") != std::string::npos ||
+            query.find("prefers-color-scheme:dark") != std::string::npos)
+            return false;
+        auto checkBound = [&](std::string_view property, bool minimum) {
+            size_t pos = 0;
+            while ((pos = query.find(property, pos)) != std::string::npos) {
+                pos += property.size();
+                while (pos < query.size() &&
+                       std::isspace(static_cast<unsigned char>(query[pos]))) ++pos;
+                if (pos >= query.size() || query[pos] != ':') continue;
+                ++pos;
+                while (pos < query.size() &&
+                       std::isspace(static_cast<unsigned char>(query[pos]))) ++pos;
+                if (pos >= query.size() || !std::isdigit(
+                        static_cast<unsigned char>(query[pos]))) continue;
+                const int bound = std::atoi(query.c_str() + pos);
+                if (minimum && viewportWidth < bound) return false;
+                if (!minimum && viewportWidth > bound) return false;
+            }
+            return true;
+        };
+        return checkBound("min-width", true) && checkBound("max-width", false);
+    };
+
+    std::function<void(size_t, size_t)> visit;
+    visit = [&](size_t start, size_t limit) {
+        size_t pos = start;
+        while (pos < limit && rules_.size() < 5000) {
+            const size_t opening = cleaned.find('{', pos);
+            if (opening == std::string::npos || opening >= limit) break;
+            int depth = 1;
+            size_t close = opening + 1;
+            while (close < limit && depth > 0) {
+                if (cleaned[close] == '{') ++depth;
+                else if (cleaned[close] == '}') --depth;
+                ++close;
+            }
+            if (depth != 0) break;
+            const size_t braceEnd = close - 1;
+            const std::string heading =
+                Lower(Trim(std::string_view(cleaned).substr(pos, opening - pos)));
+            if (!heading.empty() && heading[0] == '@') {
+                if ((heading.starts_with("@media") && mediaMatches(heading)) ||
+                    heading.starts_with("@layer")) {
+                    visit(opening + 1, braceEnd);
+                }
+                // Skip @font-face, @keyframes, unsupported feature queries.
+            } else {
+                const auto declarations = ParseDeclarations(
+                    std::string_view(cleaned).substr(opening + 1,
+                                                    braceEnd - opening - 1));
+                size_t selectorBegin = 0;
+                while (selectorBegin < heading.size() && rules_.size() < 5000) {
+                    const size_t comma = heading.find(',', selectorBegin);
+                    const size_t selectorEnd =
+                        comma == std::string::npos ? heading.size() : comma;
+                    std::string selector =
+                        Trim(std::string_view(heading).substr(selectorBegin,
+                                      selectorEnd - selectorBegin));
+                    if (!selector.empty()) rules_.push_back(
+                        {std::move(selector), declarations});
+                    if (comma == std::string::npos) break;
+                    selectorBegin = comma + 1;
+                }
+            }
+            pos = close;
+        }
+    };
+    visit(0, cleaned.size());
 }
-void CssEdges(std::string_view value, int& top, int& right,
-              int& bottom, int& left) {
-    std::istringstream stream{std::string(value)};
-    std::string words[4];
-    int values[4]{};
-    int count = 0;
-    while (count < 4 && stream >> words[count]) ++count;
-    if (count == 0) return;
-    for (int i = 0; i < count; ++i) {
-        values[i] = words[i] == "auto" ? -1 : CssPixels(words[i], 0);
-    }
-    top = values[0];
-    right = values[count > 1 ? 1 : 0];
-    bottom = values[count > 2 ? 2 : 0];
-    left = values[count > 3 ? 3 : (count > 1 ? 1 : 0)];
-}
-} // namespace
 
 void Sheet::Apply(Computed& style, std::string_view rawKey,
                   std::string_view rawValue) {

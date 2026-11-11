@@ -146,6 +146,22 @@ void TestStyles() {
     Check(!result.hidden, "nonmatching direct child must not hide");
     Check(cascade.Compute(*wrapper, parent).bold,
           "direct-child style on div");
+    ac::style::Sheet responsive;
+    responsive.Parse("@media screen and (min-width:600px) {"
+                     ".panel {color:#204060;} }"
+                     "@media screen and (max-width:500px) {"
+                     ".panel {color:#aabbcc;} }", 800);
+    Check(responsive.Compute(*wrapper, parent).color ==
+          RGB(0x20,0x40,0x60), "desktop media query");
+    responsive.Parse("@media screen and (min-width:600px) {"
+                     ".panel {color:#204060;} }"
+                     "@media screen and (max-width:500px) {"
+                     ".panel {color:#aabbcc;} }", 400);
+    Check(responsive.Compute(*wrapper, parent).color ==
+          RGB(0xaa,0xbb,0xcc), "mobile media query");
+    responsive.Parse("@layer components { .panel {font-size:20px;} }", 800);
+    Check(responsive.Compute(*wrapper, parent).fontSize == 20,
+          "nested stylesheet layer");
 }
 void TestScreenRects() {
     using ac::tech::idScreenRect;

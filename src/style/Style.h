@@ -35,7 +35,7 @@ struct Computed {
 class Sheet {
 public:
     using Declaration = std::pair<std::string, std::string>;
-    void Parse(std::string_view css);
+    void Parse(std::string_view css, int viewportWidth = 1024);
     [[nodiscard]] Computed Compute(const html::Node& node,
                                    const Computed& parent) const;
 private:
