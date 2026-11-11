@@ -111,6 +111,21 @@ void TestStyles() {
     const auto* p = Find(*styledCenter.root, "p");
     Check(p && sheet.Compute(*p, parent).textAlign ==
         ac::style::TextAlign::Right, "CSS text-align:right");
+    auto boxDocument = ac::html::Parse(
+        "<main style='max-width:700px;margin:20px auto;"
+        "padding:10px 25px;background:#123456'>"
+        "<p style='width:50%;padding-left:6px'>text</p></main>");
+    const auto* box = Find(*boxDocument.root, "main");
+    const auto* child = Find(*boxDocument.root, "p");
+    Check(box && child, "box model fixtures");
+    const auto metrics = sheet.Compute(*box, parent);
+    Check(metrics.maxWidthPixels == 700 && metrics.marginLeft == -1 &&
+          metrics.marginRight == -1 && metrics.paddingLeft == 25 &&
+          metrics.paddingRight == 25 && metrics.paddingTop == 10 &&
+          metrics.background == RGB(0x12,0x34,0x56), "CSS box metrics");
+    const auto inside = sheet.Compute(*child, metrics);
+    Check(inside.widthPercent == 50 && inside.paddingLeft == 6 &&
+          inside.maxWidthPixels == -1, "non inherited box metrics");
 
     auto nested = ac::html::Parse(
         "<main id='app'><div class='panel'><p class='title'>Hello</p></div></main>");

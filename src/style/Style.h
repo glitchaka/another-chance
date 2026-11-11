@@ -15,6 +15,16 @@ struct Computed {
     TextAlign textAlign = TextAlign::Left;
     int marginTop = 0;
     int marginBottom = 0;
+    int marginLeft = 0;
+    int marginRight = 0;
+    int paddingTop = 0;
+    int paddingBottom = 0;
+    int paddingLeft = 0;
+    int paddingRight = 0;
+    int widthPixels = -1;
+    int widthPercent = -1;
+    int maxWidthPixels = -1;
+    int minHeightPixels = 0;
     bool bold = false;
     bool italic = false;
     bool underline = false;

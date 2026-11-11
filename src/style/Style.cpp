@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cmath>
 #include <string>
 #include <sstream>
 
@@ -125,6 +126,33 @@ void Sheet::Parse(std::string_view css) {
     }
 }
 
+namespace {
+int CssPixels(std::string_view value, int fallback) {
+    std::string text(value);
+    char* tail = nullptr;
+    const float number = std::strtof(text.c_str(), &tail);
+    if (tail == text.c_str() || !std::isfinite(number)) return fallback;
+    if (*tail && std::string_view(tail) != "px") return fallback;
+    return std::clamp(static_cast<int>(number), 0, 8192);
+}
+void CssEdges(std::string_view value, int& top, int& right,
+              int& bottom, int& left) {
+    std::istringstream stream{std::string(value)};
+    std::string words[4];
+    int values[4]{};
+    int count = 0;
+    while (count < 4 && stream >> words[count]) ++count;
+    if (count == 0) return;
+    for (int i = 0; i < count; ++i) {
+        values[i] = words[i] == "auto" ? -1 : CssPixels(words[i], 0);
+    }
+    top = values[0];
+    right = values[count > 1 ? 1 : 0];
+    bottom = values[count > 2 ? 2 : 0];
+    left = values[count > 3 ? 3 : (count > 1 ? 1 : 0)];
+}
+} // namespace
+
 void Sheet::Apply(Computed& style, std::string_view rawKey,
                   std::string_view rawValue) {
     const std::string key = Lower(Trim(rawKey));
@@ -164,6 +192,43 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
         if (value == "left" || value == "start") style.textAlign = TextAlign::Left;
         else if (value == "center") style.textAlign = TextAlign::Center;
         else if (value == "right" || value == "end") style.textAlign = TextAlign::Right;
+    } else if (key == "width") {
+        if (value == "auto") { style.widthPixels = -1; style.widthPercent = -1; }
+        else if (value.ends_with("%")) {
+            char* tail = nullptr;
+            const float number = std::strtof(value.c_str(), &tail);
+            if (tail != value.c_str() && *tail == '%') {
+                style.widthPercent = std::clamp(static_cast<int>(number), 0, 100);
+                style.widthPixels = -1;
+            }
+        } else {
+            style.widthPixels = CssPixels(value, style.widthPixels);
+            style.widthPercent = -1;
+        }
+    } else if (key == "max-width") {
+        style.maxWidthPixels = value == "none" ? -1 : CssPixels(value, -1);
+    } else if (key == "min-height") {
+        style.minHeightPixels = CssPixels(value, 0);
+    } else if (key == "padding") {
+        CssEdges(value, style.paddingTop, style.paddingRight,
+                 style.paddingBottom, style.paddingLeft);
+    } else if (key == "padding-top") {
+        style.paddingTop = CssPixels(value, style.paddingTop);
+    } else if (key == "padding-right") {
+        style.paddingRight = CssPixels(value, style.paddingRight);
+    } else if (key == "padding-bottom") {
+        style.paddingBottom = CssPixels(value, style.paddingBottom);
+    } else if (key == "padding-left") {
+        style.paddingLeft = CssPixels(value, style.paddingLeft);
+    } else if (key == "margin") {
+        CssEdges(value, style.marginTop, style.marginRight,
+                 style.marginBottom, style.marginLeft);
+        style.marginTop = std::max(0, style.marginTop);
+        style.marginBottom = std::max(0, style.marginBottom);
+    } else if (key == "margin-left") {
+        style.marginLeft = value == "auto" ? -1 : CssPixels(value, 0);
+    } else if (key == "margin-right") {
+        style.marginRight = value == "auto" ? -1 : CssPixels(value, 0);
     } else if (key == "margin-top" || key == "margin-bottom") {
         char* end = nullptr;
         const long amount = std::strtol(value.c_str(), &end, 10);
@@ -282,6 +347,14 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     result.block = false;
     result.marginTop = 0;
     result.marginBottom = 0;
+    result.marginLeft = 0;
+    result.marginRight = 0;
+    result.paddingTop = result.paddingRight = 0;
+    result.paddingBottom = result.paddingLeft = 0;
+    result.widthPixels = -1;
+    result.widthPercent = -1;
+    result.maxWidthPixels = -1;
+    result.minHeightPixels = 0;
     result.background = CLR_INVALID;
     if (node.type != html::Node::Type::Element) return result;
     const auto& tag = node.tag;
