@@ -201,7 +201,7 @@ void Draw(HDC dc,int width,int height,const std::vector<Tab>& tabs,
             L"Nueva pestaña" : tabs[i].title;
         Label(g,name,RectF(static_cast<REAL>(tab.left+25),
                           static_cast<REAL>(tab.top+1),
-                          static_cast<REAL>(std::max(22,tab.right-tab.left-57)),
+                          static_cast<REAL>(std::max<LONG>(22,tab.right-tab.left-57)),
                           28),12,active?kInk:kMuted,active);
         Line(g,kMuted,1.4f,PointF(static_cast<REAL>(tab.right-21),14),
                              PointF(static_cast<REAL>(tab.right-13),22));
