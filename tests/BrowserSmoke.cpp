@@ -336,6 +336,13 @@ int wmain(int argc, wchar_t** argv) {
         HICON extractedLarge = nullptr;
         HICON extractedSmall = nullptr;
         const UINT icons = ExtractIconExW(argv[1], 0, &extractedLarge, &extractedSmall, 1);
+        if (icons != 1 || !extractedLarge || !extractedSmall) {
+            std::wcerr << L"ICON diagnostic: executable=" << argv[1]
+                       << L" returned=" << icons
+                       << L" big=" << static_cast<void*>(extractedLarge)
+                       << L" small=" << static_cast<void*>(extractedSmall)
+                       << L" error=" << GetLastError() << L"\n";
+        }
         Check(icons == 1 && extractedLarge != nullptr && extractedSmall != nullptr,
               "Executable does not contain a real Windows icon resource");
         if (extractedLarge) DestroyIcon(extractedLarge);

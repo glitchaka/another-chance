@@ -138,6 +138,12 @@ void TestStyles() {
     ac::style::Sheet gridStyle;
     gridStyle.Parse("nav {display:grid; grid-template-columns:repeat(3,1fr);}");
     const auto grid = gridStyle.Compute(*nav, parent);
+    if (grid.layoutMode != ac::style::LayoutMode::Grid ||
+        grid.gridColumns != 3) {
+        std::cerr << "CSS GRID diagnostics: mode=" <<
+            static_cast<int>(grid.layoutMode) <<
+            " columns=" << grid.gridColumns << "\n";
+    }
     Check(grid.layoutMode == ac::style::LayoutMode::Grid &&
           grid.gridColumns == 3, "grid track count parsed");
 
