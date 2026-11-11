@@ -137,13 +137,14 @@ void TestStyles() {
           flexStyle.gapPixels == 12, "flex layout and gap parsed");
     ac::style::Sheet gridStyle;
     gridStyle.Parse("nav {display:grid; grid-template-columns:repeat(3,1fr);}");
-    const auto grid = gridStyle.Compute(*nav, parent);
-    if (grid.layoutMode != ac::style::LayoutMode::Grid ||
-        grid.gridColumns != 3) {
-        std::cerr << "CSS GRID diagnostics: mode=" <<
-            static_cast<int>(grid.layoutMode) <<
-            " columns=" << grid.gridColumns << "\n";
-    }
+    // The existing nav has inline display:flex; the inline style must win.
+    Check(gridStyle.Compute(*nav, parent).layoutMode ==
+          ac::style::LayoutMode::FlexRow,
+          "inline display wins over stylesheet display");
+    const auto gridDocument = ac::html::Parse("<nav><div>Card</div></nav>");
+    const auto* gridNode = Find(*gridDocument.root, "nav");
+    Check(gridNode != nullptr, "grid fixture exists");
+    const auto grid = gridStyle.Compute(*gridNode, parent);
     Check(grid.layoutMode == ac::style::LayoutMode::Grid &&
           grid.gridColumns == 3, "grid track count parsed");
 

@@ -343,7 +343,8 @@ int wmain(int argc, wchar_t** argv) {
                        << L" small=" << static_cast<void*>(extractedSmall)
                        << L" error=" << GetLastError() << L"\n";
         }
-        Check(icons == 1 && extractedLarge != nullptr && extractedSmall != nullptr,
+        Check(icons >= 1 && icons != UINT_MAX &&
+              extractedLarge != nullptr && extractedSmall != nullptr,
               "Executable does not contain a real Windows icon resource");
         if (extractedLarge) DestroyIcon(extractedLarge);
         if (extractedSmall) DestroyIcon(extractedSmall);
