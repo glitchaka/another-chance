@@ -7,10 +7,12 @@
 #include <vector>
 
 namespace ac::style {
+enum class TextAlign { Left, Center, Right };
 struct Computed {
     COLORREF color = RGB(35, 40, 46);
     COLORREF background = CLR_INVALID;
     int fontSize = 16;
+    TextAlign textAlign = TextAlign::Left;
     int marginTop = 0;
     int marginBottom = 0;
     bool bold = false;

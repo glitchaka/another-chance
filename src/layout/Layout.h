@@ -51,8 +51,11 @@ private:
     int lineHeight_ = 24;
     int height_ = 0;
     int listDepth_ = 0;
+    size_t lineBegin_ = 0;
+    style::TextAlign lineAlign_ = style::TextAlign::Left;
 
     HFONT Font(int fontSize, bool bold, bool italic, bool underline);
+    void AlignLine();
     void NewLine();
     void BeginBlock(const style::Computed& style);
     void EndBlock(const style::Computed& style);

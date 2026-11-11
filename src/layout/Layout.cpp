@@ -30,10 +30,32 @@ HFONT PageLayout::Font(int size, bool bold, bool italic, bool underline) {
     return font;
 }
 
+void PageLayout::AlignLine() {
+    if (lineBegin_ >= items_.size() ||
+        lineAlign_ == style::TextAlign::Left) return;
+    int lastRight = left_;
+    for (size_t i = lineBegin_; i < items_.size(); ++i) {
+        if (items_[i].kind == Item::Kind::Text && items_[i].rect.top == y_) {
+            lastRight = std::max(lastRight, static_cast<int>(items_[i].rect.right));
+        }
+    }
+    const int room = std::max(0, right_ - lastRight);
+    const int dx = lineAlign_ == style::TextAlign::Center ? room / 2 : room;
+    for (size_t i = lineBegin_; i < items_.size(); ++i) {
+        if (items_[i].kind == Item::Kind::Text && items_[i].rect.top == y_) {
+            items_[i].rect.left += dx;
+            items_[i].rect.right += dx;
+        }
+    }
+}
+
 void PageLayout::NewLine() {
+    AlignLine();
     x_ = left_ + listDepth_ * 22;
     y_ += std::max(20, lineHeight_);
     lineHeight_ = 24;
+    lineBegin_ = items_.size();
+    lineAlign_ = style::TextAlign::Left;
 }
 
 void PageLayout::BeginBlock(const style::Computed& style) {
@@ -59,6 +81,7 @@ void PageLayout::AppendWord(HDC dc, std::wstring_view word,
     };
     const SIZE space = measure(L" ");
     const int minX = left_ + listDepth_ * 22;
+    if (x_ == minX) lineAlign_ = style.textAlign;
     if (precededBySpace && x_ > minX) x_ += space.cx;
     std::wstring remaining(word);
     while (!remaining.empty()) {
@@ -141,6 +164,7 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         item.color = RGB(209, 214, 221);
         items_.push_back(std::move(item));
         y_ += 14;
+        lineBegin_ = items_.size();
         return;
     }
 
@@ -174,10 +198,17 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         image.kind = Item::Kind::Image;
         image.imageUrl = source;
         image.link = link;
-        image.rect = {x_, y_, x_ + imageWidth, y_ + imageHeight};
+        int imageX = x_;
+        if (computed.textAlign == style::TextAlign::Center) {
+            imageX = left_ + listDepth_ * 22 + (available - imageWidth) / 2;
+        } else if (computed.textAlign == style::TextAlign::Right) {
+            imageX = left_ + listDepth_ * 22 + available - imageWidth;
+        }
+        image.rect = {imageX, y_, imageX + imageWidth, y_ + imageHeight};
         items_.push_back(std::move(image));
         y_ += imageHeight + 12;
         x_ = left_ + listDepth_ * 22;
+        lineBegin_ = items_.size();
         lineHeight_ = 24;
         return;
     }
@@ -232,8 +263,11 @@ void PageLayout::Reflow(HDC dc, const html::Document& document,
     y_ = 18;
     lineHeight_ = 24;
     listDepth_ = 0;
+    lineBegin_ = 0;
+    lineAlign_ = style::TextAlign::Left;
     const style::Computed initial{};
     if (document.root) Walk(dc, *document.root, initial, {});
+    AlignLine();
     height_ = y_ + lineHeight_ + 24;
 }
 

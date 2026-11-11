@@ -20,7 +20,8 @@ std::string Lower(std::string_view input) {
     return out;
 }
 bool IsBlock(std::string_view tag) {
-    return tag == "html" || tag == "body" || tag == "main" || tag == "article" ||
+    return tag == "html" || tag == "body" || tag == "center" ||
+        tag == "main" || tag == "article" ||
         tag == "section" || tag == "header" || tag == "footer" || tag == "nav" ||
         tag == "div" || tag == "p" || tag == "h1" || tag == "h2" || tag == "h3" ||
         tag == "h4" || tag == "h5" || tag == "h6" || tag == "ul" || tag == "ol" ||
@@ -159,6 +160,10 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
         else if (value == "inline") style.block = false;
     } else if (key == "visibility") {
         if (value == "hidden" || value == "collapse") style.hidden = true;
+    } else if (key == "text-align") {
+        if (value == "left" || value == "start") style.textAlign = TextAlign::Left;
+        else if (value == "center") style.textAlign = TextAlign::Center;
+        else if (value == "right" || value == "end") style.textAlign = TextAlign::Right;
     } else if (key == "margin-top" || key == "margin-bottom") {
         char* end = nullptr;
         const long amount = std::strtol(value.c_str(), &end, 10);
@@ -205,6 +210,13 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     const auto& tag = node.tag;
     result.block = IsBlock(tag);
     if (tag == "document") result.block = false;
+    if (tag == "center") result.textAlign = TextAlign::Center;
+    if (tag == "div" || tag == "p" || tag == "h1" || tag == "h2" || tag == "h3") {
+        const auto htmlAlign = Lower(node.Attribute("align"));
+        if (htmlAlign == "center") result.textAlign = TextAlign::Center;
+        else if (htmlAlign == "right") result.textAlign = TextAlign::Right;
+        else if (htmlAlign == "left") result.textAlign = TextAlign::Left;
+    }
     if (tag == "head" || tag == "title" || tag == "script" ||
         tag == "style" || tag == "meta" || tag == "link" ||
         tag == "noscript" || tag == "svg" || tag == "canvas" ||

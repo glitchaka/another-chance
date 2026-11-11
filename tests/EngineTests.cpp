@@ -79,6 +79,22 @@ void TestStyles() {
           "input type case-insensitive hidden");
     Check(!sheet.Compute(*form->children[5], parent).hidden,
           "normal input remains visible");
+    auto center = ac::html::Parse(
+        "<center><p>Centered heading</p></center>");
+    const auto* centered = Find(*center.root, "center");
+    Check(centered != nullptr, "center element exists");
+    const auto centerStyle = sheet.Compute(*centered, parent);
+    Check(centerStyle.block && centerStyle.textAlign == ac::style::TextAlign::Center,
+          "HTML center element produces a centered block");
+    const auto* centerParagraph = Find(*center.root, "p");
+    Check(centerParagraph &&
+          sheet.Compute(*centerParagraph, centerStyle).textAlign ==
+              ac::style::TextAlign::Center,
+          "text alignment is inherited");
+    auto styledCenter = ac::html::Parse("<p style='text-align:right'>Right</p>");
+    const auto* p = Find(*styledCenter.root, "p");
+    Check(p && sheet.Compute(*p, parent).textAlign ==
+        ac::style::TextAlign::Right, "CSS text-align:right");
 }
 void TestScreenRects() {
     using ac::tech::idScreenRect;
