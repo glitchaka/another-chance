@@ -801,6 +801,8 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return static_cast<LRESULT>(chromePaintCount_);
         case WM_APP + 41:
             return static_cast<LRESULT>(scrollY_);
+        case WM_APP + 42:
+            return layout_.HasVisibleContent() ? 1 : 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:

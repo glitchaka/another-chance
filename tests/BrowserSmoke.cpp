@@ -111,7 +111,15 @@ private:
                 } else if (request.find("GET /js-only ") != std::string::npos) {
                     body = "<!doctype html><html><head><title>Aplicación JS</title>"
                            "<style>#root{display:none}</style></head><body>"
-                           "<div id='root'></div><script>document.body.innerHTML='contenido';"
+                           "<div id='root'></div><script>fetch('/api').then("
+                           "r=>r.json()).then(data=>document.body.innerHTML=data.html)"
+                           "</script></body></html>";
+                } else if (request.find("GET /inline-dom ") != std::string::npos) {
+                    body = "<!doctype html><html><head><title>Inicial</title></head>"
+                           "<body><main id='app'></main><script>"
+                           "document.getElementById('app').innerHTML="
+                           "'<h1>Contenido generado</h1>';"
+                           "document.title='DOM activo';"
                            "</script></body></html>";
                 } else if (request.find("GET /next ") != std::string::npos) {
                     ++nextRequests;
@@ -459,6 +467,7 @@ int wmain(int argc, wchar_t** argv) {
               "Switching back to first tab did not restore navigation");
         std::cout << "PASS: switch tab and restore previous URL\n";
         } // close the first GUI before launching the second test instance
+        {
         BrowserProcess jsBrowser(argv[1],
             L"http://127.0.0.1:" + std::to_wstring(server.Port()) + L"/js-only");
         Check(Until([&] {
@@ -468,7 +477,21 @@ int wmain(int argc, wchar_t** argv) {
         }, 12000), "JS-only site did not report unsupported blank page");
         Sleep(200);
         CaptureScreenshot(jsBrowser.Window(), "AnotherChance-JS-fallback.bmp");
-        std::cout << "PASS: JS-only HTML reports visible unsupported-page state\n";
+        std::cout << "PASS: unsupported JS remains visibly reported\n";
+        } // JS-only browser closed
+        {
+            BrowserProcess scripted(argv[1],
+                L"http://127.0.0.1:" + std::to_wstring(server.Port()) +
+                L"/inline-dom");
+            Check(Until([&] {
+                return scripted.IsAlive() &&
+                       scripted.HasTitle(L"DOM activo") &&
+                       scripted.HasHttp200() &&
+                       SendMessageW(scripted.Window(), WM_APP + 42, 0, 0) == 1;
+            }, 14000), "Script-generated HTML did not reach the live renderer");
+            CaptureScreenshot(scripted.Window(), "AnotherChance-scripted-dom.bmp");
+            std::cout << "PASS: inline script generates visible native DOM\n";
+        }
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';
