@@ -2,6 +2,8 @@
 #include "style/Style.h"
 #include "util/Url.h"
 #include "tech/IdScreenRect.h"
+#include "layout/Layout.h"
+#include "image/ImageStore.h"
 #include <windows.h>
 #include <iostream>
 #include <stdexcept>
@@ -108,6 +110,37 @@ void TestScreenRects() {
     Check(one.IsEmpty(), "non-overlapping rectangles are empty");
 }
 
+
+void TestLayoutGeometry() {
+    HDC dc = CreateCompatibleDC(nullptr);
+    Check(dc != nullptr, "create memory DC");
+    ac::style::Sheet sheet;
+    ac::image::Store images;
+    ac::layout::PageLayout layout;
+    constexpr wchar_t url[] = L"https://example.org/";
+    auto aligned = ac::html::Parse(
+        "<center><a href='/link'>ANCLACENTRADA</a></center>");
+    layout.Reflow(dc, aligned, sheet, images, url, 400);
+    Check(layout.LinkAt(200, 24, 0, 0) == L"https://example.org/link",
+          "centered text hyperlink has correct hit rectangle");
+    Check(layout.LinkAt(25, 24, 0, 0).empty(),
+          "centered element is not incorrectly left aligned");
+
+    auto onlyVisible = ac::html::Parse("<p>VISIBLE</p>");
+    layout.Reflow(dc, onlyVisible, sheet, images, url, 400);
+    const int visibleHeight = layout.Height();
+
+    auto withHidden = ac::html::Parse(
+        "<input type='hidden' value='DO_NOT_DISPLAY'>"
+        "<div hidden>INTERNAL</div>"
+        "<section style='display:none'>INTERNAL_2</section>"
+        "<p>VISIBLE</p>");
+    layout.Reflow(dc, withHidden, sheet, images, url, 400);
+    Check(layout.Height() == visibleHeight,
+          "hidden elements must not affect rendered height");
+    DeleteDC(dc);
+}
+
 void TestUrls() {
     Check(ac::url::Normalize(L"example.org") == L"https://example.org",
           "address normalization");
@@ -132,6 +165,7 @@ int main() {
         TestStyles();
         TestUrls();
         TestScreenRects();
+        TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
         return 0;
     } catch (const std::exception& error) {
