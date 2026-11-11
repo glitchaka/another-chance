@@ -92,7 +92,8 @@ HWND BrowserWindow::Create(HINSTANCE instance, std::wstring initialUrl) {
     auto* window = new BrowserWindow();
     window->initialUrl_ = std::move(initialUrl);
     HWND hwnd = CreateWindowExW(WS_EX_APPWINDOW, kClassName, L"Another Chance",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+        WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX |
+        WS_MAXIMIZEBOX | WS_CLIPCHILDREN,
         CW_USEDEFAULT, CW_USEDEFAULT, 1060, 780,
         nullptr, nullptr, instance, window);
     if (!hwnd) {
@@ -428,11 +429,35 @@ void BrowserWindow::OpenMenu() {
     AppendMenuW(menu, MF_STRING, kHome, L"Página de inicio");
     AppendMenuW(menu, MF_STRING, kReload, L"Recargar\tF5");
     AppendMenuW(menu, MF_STRING, kBookmark, L"Guardar marcador");
-    POINT point{clientWidth_ - 48, 102};
+    POINT point{clientWidth_ - 171, kToolbarHeight - 2};
     ClientToScreen(hwnd_, &point);
     TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
                    point.x, point.y, 0, hwnd_, nullptr);
     DestroyMenu(menu);
+}
+
+void BrowserWindow::OpenTabMenu() {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, kNewTab, L"+ Nueva vista\tCtrl+T");
+    AppendMenuW(menu, MF_STRING, kCloseTab, L"Cerrar vista actual\tCtrl+W");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    for (size_t i = 0; i < tabs_.size(); ++i) {
+        const std::wstring caption = std::to_wstring(i + 1) + L"  " +
+            (tabs_[i].title.empty() ? L"Nueva vista" : tabs_[i].title);
+        AppendMenuW(menu, MF_STRING | (i == activeTab_ ? MF_CHECKED : 0),
+                    static_cast<UINT>(kSelectTabBase + i), caption.c_str());
+    }
+    POINT pt{clientWidth_ - 269, kToolbarHeight - 1};
+    ClientToScreen(hwnd_, &pt);
+    TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                   pt.x, pt.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
+void BrowserWindow::MaximizeRestore() {
+    ShowWindow(hwnd_, IsZoomed(hwnd_) ? SW_RESTORE : SW_MAXIMIZE);
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void BrowserWindow::SetStatus(const std::wstring& message) {
@@ -526,11 +551,11 @@ int BrowserWindow::MaxScroll() const {
 void BrowserWindow::Resize(int width, int height) {
     clientWidth_ = std::max(1, width);
     clientHeight_ = std::max(1, height);
-    const auto geometry = chrome::Measure(clientWidth_, tabs_.size());
+    const auto geometry = chrome::Measure(clientWidth_);
     if (address_) {
-        MoveWindow(address_, geometry.address.left + 38, 62,
-                   std::max(90, static_cast<int>(geometry.address.right -
-                                                geometry.address.left - 83)),
+        MoveWindow(address_, geometry.address.left + 42, 25,
+                   std::max(70, static_cast<int>(geometry.address.right -
+                                                geometry.address.left - 54)),
                    26, TRUE);
     }
     if (status_) {
@@ -617,7 +642,8 @@ void BrowserWindow::DrawClient(HDC dc) {
     chrome::Draw(dc, clientWidth_, clientHeight_, tabLabels, activeTab_,
                  !history_.empty() && historyIndex_ > 0,
                  !history_.empty() && historyIndex_ + 1 < history_.size(),
-                 bookmarks_.contains(currentUrl_), isLoading_);
+                 bookmarks_.contains(currentUrl_), isLoading_,
+                 IsZoomed(hwnd_) != FALSE);
 }
 
 void BrowserWindow::Paint() {
@@ -629,6 +655,44 @@ void BrowserWindow::Paint() {
 
 LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+        case WM_NCCALCSIZE:
+            // Remove the caption and all native nonclient painting.
+            if (wparam == TRUE) return 0;
+            break;
+        case WM_NCPAINT:
+            return 0;
+        case WM_NCACTIVATE:
+            return TRUE;
+        case WM_NCHITTEST: {
+            const POINT screen{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+            RECT bounds{};
+            GetWindowRect(hwnd_, &bounds);
+            const int x = screen.x - bounds.left;
+            const int y = screen.y - bounds.top;
+            if (!IsZoomed(hwnd_)) {
+                constexpr int edge = 8;
+                const bool left = x < edge;
+                const bool right = x >= bounds.right - bounds.left - edge;
+                const bool top = y < edge;
+                const bool bottom = y >= bounds.bottom - bounds.top - edge;
+                if (top && left) return HTTOPLEFT;
+                if (top && right) return HTTOPRIGHT;
+                if (bottom && left) return HTBOTTOMLEFT;
+                if (bottom && right) return HTBOTTOMRIGHT;
+                if (left) return HTLEFT;
+                if (right) return HTRIGHT;
+                if (top) return HTTOP;
+                if (bottom) return HTBOTTOM;
+            }
+            if (chrome::IsDraggable(x, y, clientWidth_)) return HTCAPTION;
+            return HTCLIENT;
+        }
+        case WM_NCLBUTTONDBLCLK:
+            if (wparam == HTCAPTION) {
+                MaximizeRestore();
+                return 0;
+            }
+            break;
         case WM_CREATE:
             OnCreate();
             return 0;
@@ -677,7 +741,13 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                     SetFocus(address_);
                     SendMessageW(address_, EM_SETSEL, 0, -1);
                     return 0;
-                default: break;
+                default:
+                    if (LOWORD(wparam) >= kSelectTabBase &&
+                        LOWORD(wparam) < kSelectTabBase + 5) {
+                        SwitchTab(LOWORD(wparam) - kSelectTabBase);
+                        return 0;
+                    }
+                    break;
             }
             break;
         case WM_MOUSEWHEEL: {
@@ -690,7 +760,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             const int x = GET_X_LPARAM(lparam);
             const int y = GET_Y_LPARAM(lparam);
             if (y < kToolbarHeight) {
-                const auto hit = chrome::HitTest(x, y, clientWidth_, tabs_.size());
+                const auto hit = chrome::HitTest(x, y, clientWidth_);
                 switch (hit.action) {
                     case chrome::Action::Back: GoBack(); break;
                     case chrome::Action::Forward: GoForward(); break;
@@ -698,9 +768,10 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                     case chrome::Action::Home: ShowHome(); break;
                     case chrome::Action::Bookmark: ToggleBookmark(); break;
                     case chrome::Action::Menu: OpenMenu(); break;
-                    case chrome::Action::AddTab: OpenTab(); break;
-                    case chrome::Action::SelectTab: SwitchTab(hit.tab); break;
-                    case chrome::Action::CloseTab: CloseTab(hit.tab); break;
+                    case chrome::Action::TabMenu: OpenTabMenu(); break;
+                    case chrome::Action::Minimize: ShowWindow(hwnd_, SW_MINIMIZE); break;
+                    case chrome::Action::Maximize: MaximizeRestore(); break;
+                    case chrome::Action::Close: PostMessageW(hwnd_, WM_CLOSE, 0, 0); break;
                     case chrome::Action::None: break;
                 }
                 return 0;
@@ -719,7 +790,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 ScreenToClient(hwnd_, &point);
                 const RECT content = ContentRect();
                 if (point.y < kToolbarHeight && chrome::HitTest(
-                        point.x, point.y, clientWidth_, tabs_.size()).action !=
+                        point.x, point.y, clientWidth_).action !=
                         chrome::Action::None) {
                     SetCursor(LoadCursorW(nullptr, IDC_HAND));
                     return TRUE;
@@ -747,7 +818,18 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             break;
         case WM_GETMINMAXINFO: {
             auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
-            info->ptMinTrackSize.x = 680;
+            const HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO monitorInfo{};
+            monitorInfo.cbSize = sizeof(monitorInfo);
+            if (GetMonitorInfoW(monitor, &monitorInfo)) {
+                const RECT m = monitorInfo.rcMonitor;
+                const RECT work = monitorInfo.rcWork;
+                info->ptMaxPosition.x = work.left - m.left;
+                info->ptMaxPosition.y = work.top - m.top;
+                info->ptMaxSize.x = work.right - work.left;
+                info->ptMaxSize.y = work.bottom - work.top;
+            }
+            info->ptMinTrackSize.x = 860;
             info->ptMinTrackSize.y = 420;
             return 0;
         }

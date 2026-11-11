@@ -43,3 +43,7 @@ Código derivado de DOOM 3 BFG: GPLv3 con los términos adicionales y exclusione
 ## Interfaz
 
 Diseño nativo renovado inspirado en las referencias proporcionadas: franja superior de pestañas, botones vectoriales minimalistas y barra de dirección redondeada sobre fondo claro. No usa HTML/CSS para la interfaz. Puede abrir hasta cinco pestañas independientes (las páginas se recargan al volver a una pestaña). El marcador de estrella se conserva durante la sesión, no en disco. Accesos: Ctrl+T, Ctrl+W, Ctrl+L, Alt+flechas, F5.
+
+## Ventana y diseño propio
+
+La ventana usa un marco Win32 dibujado íntegramente en el cliente, sin barra de título ni botones del sistema. Es redimensionable desde los bordes, arrastrable desde las zonas libres de su encabezado, maximizable y minimizable mediante controles propios. El encabezado de una sola franja distingue a Another Chance de las barras de pestañas de Chromium: identidad visual a la izquierda, búsqueda central y selector de vistas a la derecha. El selector permite alternar entre hasta cinco vistas.

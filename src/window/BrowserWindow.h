@@ -30,6 +30,7 @@ public:
     static constexpr WORD kCloseTab = 107;
     static constexpr WORD kBookmark = 108;
     static constexpr WORD kHome = 109;
+    static constexpr WORD kSelectTabBase = chrome::kTabCommandBase;
     static HWND Create(HINSTANCE instance, std::wstring initialUrl = {});
 
 private:
@@ -129,6 +130,8 @@ private:
     void CloseTab(size_t index);
     void ToggleBookmark();
     void OpenMenu();
+    void OpenTabMenu();
+    void MaximizeRestore();
     void Navigate(std::wstring address, bool recordHistory);
     void GoBack();
     void GoForward();

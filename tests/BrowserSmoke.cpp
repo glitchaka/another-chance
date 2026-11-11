@@ -196,7 +196,7 @@ public:
     }
     void ClickLink() {
         // First inline link at document (22,18) + 59px toolbar.
-        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 135));
+        PostMessageW(window_, WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(52, 108));
     }
     void Back() {
         PostMessageW(window_, WM_COMMAND, MAKEWPARAM(101, BN_CLICKED), 0);
@@ -314,6 +314,16 @@ int wmain(int argc, wchar_t** argv) {
             std::to_wstring(server.Port()) + L"/start";
         BrowserProcess browser(argv[1], page);
         Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
+        const LONG_PTR style = GetWindowLongPtrW(browser.Window(), GWL_STYLE);
+        Check((style & WS_CAPTION) == 0, "Unexpected native Windows caption");
+        Check((style & WS_POPUP) == WS_POPUP, "Expected popup-style frameless window");
+        RECT clientBounds{}, windowBounds{};
+        GetClientRect(browser.Window(), &clientBounds);
+        GetWindowRect(browser.Window(), &windowBounds);
+        Check(clientBounds.right - clientBounds.left ==
+              windowBounds.right - windowBounds.left,
+              "Non-client window frame still consumes horizontal space");
+        std::cout << "PASS: custom frameless Windows window\n";
         std::cout << "DIAG: browser startup launched with internal --url\n";
         const bool loaded = Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") && browser.HasHttp200(); }, 10000);
@@ -363,15 +373,13 @@ int wmain(int argc, wchar_t** argv) {
 
         // Tabs are real controls: create a tab, then return to the first
         // and verify that its URL/history can be restored.
-        PostMessageW(browser.Window(), WM_LBUTTONUP, MK_LBUTTON,
-                     MAKELPARAM(255, 26));
+        PostMessageW(browser.Window(), WM_COMMAND, MAKEWPARAM(106, 0), 0);
         Check(Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Another Chance") && !browser.HasHttp200(); }, 8000),
               "New tab did not open its home page");
         std::cout << "PASS: create and activate a new tab\n";
 
-        PostMessageW(browser.Window(), WM_LBUTTONUP, MK_LBUTTON,
-                     MAKELPARAM(62, 26));
+        PostMessageW(browser.Window(), WM_COMMAND, MAKEWPARAM(300, 0), 0);
         Check(Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") &&
             server.htmlRequests.load() >= 3; }, 14000),
