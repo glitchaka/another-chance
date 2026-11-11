@@ -251,14 +251,20 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
     } else if (key == "text-decoration" || key == "text-decoration-line") {
         style.underline = value.find("underline") != std::string::npos;
     } else if (key == "display") {
-        if (value == "none") style.hidden = true;
-        else if (value == "block") { style.block = true; style.layoutMode = LayoutMode::Flow; }
-        else if (value == "flex" || value == "inline-flex") {
-            style.block = true; style.layoutMode = LayoutMode::FlexRow;
-        } else if (value == "grid" || value == "inline-grid") {
-            style.block = true; style.layoutMode = LayoutMode::Grid;
+        if (value == "none") {
+            style.hidden = true;
+        } else {
+            // Later winning declarations override display:none. Previously
+            // hidden was latched forever, even with display:block later.
+            style.hidden = false;
+            if (value == "block") {
+                style.block = true; style.layoutMode = LayoutMode::Flow;
+            } else if (value == "flex" || value == "inline-flex") {
+                style.block = true; style.layoutMode = LayoutMode::FlexRow;
+            } else if (value == "grid" || value == "inline-grid") {
+                style.block = true; style.layoutMode = LayoutMode::Grid;
+            } else if (value == "inline") style.block = false;
         }
-        else if (value == "inline") style.block = false;
     } else if (key == "flex-direction") {
         if (value == "column" || value == "column-reverse")
             style.layoutMode = LayoutMode::FlexColumn;
@@ -280,6 +286,7 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
         style.gridColumns = std::clamp(columns, 1, 12);
     } else if (key == "visibility") {
         if (value == "hidden" || value == "collapse") style.hidden = true;
+        else if (value == "visible") style.hidden = false;
     } else if (key == "text-align") {
         if (value == "left" || value == "start") style.textAlign = TextAlign::Left;
         else if (value == "center") style.textAlign = TextAlign::Center;
@@ -437,6 +444,9 @@ bool Sheet::Matches(const html::Node& node, std::string_view fullSelector) {
 Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     Computed result = parent;
     result.block = false;
+    // This field is per-element: a hidden ancestor is already pruned in
+    // PageLayout::Walk, so carrying it into a descendant is incorrect.
+    result.hidden = false;
     result.marginTop = 0;
     result.marginBottom = 0;
     result.marginLeft = 0;

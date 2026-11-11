@@ -331,6 +331,30 @@ void TestScriptDom() {
     DeleteDC(dc);
 }
 
+void TestDisplayCascade() {
+    auto document = ac::html::Parse(
+        "<html><body><div id='one' class='show'>VISIBLE</div>"
+        "<div id='two' class='no'>OCULTO</div></body></html>");
+    ac::style::Sheet sheet;
+    sheet.Parse("div { display:none; } div.show { display:block; }");
+    const auto* one = Find(*document.root,"div");
+    Check(one && one->parent, "display override fixture");
+    ac::style::Computed parent;
+    const auto computed=sheet.Compute(*one,parent);
+    Check(!computed.hidden && computed.block,
+          "later display:block must override earlier display:none");
+    auto more = ac::html::Parse(
+        "<html><body><div style='display:none;display:block'>Visible</div></body></html>");
+    const auto* inlineNode=Find(*more.root,"div");
+    const auto inlineStyle=sheet.Compute(*inlineNode,parent);
+    Check(!inlineStyle.hidden,"later inline display declaration must win");
+    auto concealed=ac::html::Parse(
+        "<html><body><div style='display:none'>Hidden</div></body></html>");
+    const auto* hidden=Find(*concealed.root,"div");
+    Check(sheet.Compute(*hidden,parent).hidden,
+          "display none remains hidden without an override");
+}
+
 void TestUrls() {
     Check(ac::url::Normalize(L"example.org") == L"https://example.org",
           "address normalization");
@@ -373,6 +397,7 @@ int main() {
     try {
         TestHtml();
         TestStyles();
+        TestDisplayCascade();
         TestUrls();
         TestScriptDom();
         TestScreenRects();
