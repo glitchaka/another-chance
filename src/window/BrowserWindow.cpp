@@ -211,6 +211,7 @@ void BrowserWindow::OnCreate() {
 }
 
 void BrowserWindow::OnDestroy() {
+    formControls_.Clear();
     StopWorker();
     PostQuitMessage(0);
 }
@@ -361,6 +362,7 @@ void BrowserWindow::ShowHome() {
     historyIndex_ = 0;
     scrollY_ = 0;
     images_.Clear();
+    formControls_.Clear();
     // New tabs must be real blank workspaces, not a demo page.
     // Address/search input remains available in the native chrome.
     document_ = std::make_unique<html::Document>(
@@ -526,6 +528,7 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory) {
         historyIndex_ = history_.size() - 1;
     }
     currentUrl_ = address;
+    formControls_.Clear();
     tabs_[activeTab_].url = address;
     tabs_[activeTab_].title = L"Cargando…";
     SetWindowTextW(address_, address.c_str());
@@ -611,6 +614,10 @@ void BrowserWindow::Reflow() {
     if (!dc) return;
     sheet_.Parse(document_->embeddedCss, clientWidth_);
     layout_.Reflow(dc, *document_, sheet_, images_, currentUrl_, clientWidth_);
+    const auto instance = reinterpret_cast<HINSTANCE>(
+        GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE));
+    formControls_.Sync(hwnd_, instance, layout_.Controls(), ContentRect(),
+                       scrollY_, chromeFont_);
     ReleaseDC(hwnd_, dc);
     scrollY_ = std::clamp(scrollY_, 0, MaxScroll());
 }
@@ -625,6 +632,7 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
         if (!history_.empty()) history_[historyIndex_] = currentUrl_;
     }
     images_.Clear();
+    formControls_.Clear();
     document_ = std::make_unique<html::Document>(std::move(result->document));
     sheet_.Parse(document_->embeddedCss);
     scrollY_ = 0;
@@ -842,6 +850,17 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return static_cast<LRESULT>(tabs_.size());
         case WM_APP + 44:
             return static_cast<LRESULT>(activeTab_);
+        case WM_APP + 45:
+            return static_cast<LRESULT>(formControls_.Count());
+        case forms::NativeFormControls::kSubmitByEnter: {
+            auto from = reinterpret_cast<HWND>(wparam);
+            if (formControls_.Owns(from)) {
+                const auto target = formControls_.SubmitGet(from, currentUrl_);
+                if (!target.empty()) Navigate(target, true);
+                else SetStatus(L"Formulario no compatible: falta el envío o usa POST.");
+            }
+            return 0;
+        }
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
@@ -867,7 +886,20 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
         case kStyleReady:
             OnStyleReady(reinterpret_cast<LoadedStyle*>(lparam));
             return 0;
-        case WM_COMMAND:
+        case WM_COMMAND: {
+            auto* control = reinterpret_cast<HWND>(lparam);
+            if (control && formControls_.Owns(control)) {
+                if (HIWORD(wparam) == BN_CLICKED) {
+                    if (formControls_.IsReset(control))
+                        formControls_.ResetForm(control);
+                    else if (formControls_.IsSubmit(control)) {
+                        const auto target = formControls_.SubmitGet(control,currentUrl_);
+                        if (!target.empty()) Navigate(target,true);
+                        else SetStatus(L"Formulario no compatible: requiere POST o acción válida.");
+                    }
+                }
+                return 0;
+            }
             switch (LOWORD(wparam)) {
                 case kBack: GoBack(); return 0;
                 case kForward: GoForward(); return 0;
@@ -902,6 +934,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                     break;
             }
             break;
+        }
         case WM_MOUSEWHEEL: {
             // Preserve fractional wheel deltas from high-resolution devices.
             wheelRemainder_ += GET_WHEEL_DELTA_WPARAM(wparam);
@@ -911,6 +944,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 const int next = std::clamp(scrollY_ - ticks * 96, 0, MaxScroll());
                 if (next != scrollY_) {
                     scrollY_ = next;
+                    formControls_.Reposition(ContentRect(),scrollY_);
                     InvalidateContent();
                 }
             }
@@ -969,12 +1003,14 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             if (wparam == VK_NEXT || wparam == VK_DOWN) {
                 scrollY_ = std::min(MaxScroll(), scrollY_ +
                     (wparam == VK_NEXT ? 480 : 48));
+                formControls_.Reposition(ContentRect(),scrollY_);
                 InvalidateContent();
                 return 0;
             }
             if (wparam == VK_PRIOR || wparam == VK_UP) {
                 scrollY_ = std::max(0, scrollY_ -
                     (wparam == VK_PRIOR ? 480 : 48));
+                formControls_.Reposition(ContentRect(),scrollY_);
                 InvalidateContent();
                 return 0;
             }

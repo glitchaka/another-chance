@@ -19,6 +19,7 @@ add_executable(AnotherChance WIN32
     src/script/ScriptRuntime.cpp
     src/style/Style.cpp
     src/layout/Layout.cpp
+    src/forms/NativeFormControls.cpp
     src/window/BrowserWindow.cpp
     src/window/Chrome.cpp
 )

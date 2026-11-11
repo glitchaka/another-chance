@@ -78,6 +78,7 @@ public:
     std::atomic<int> cssRequests{0};
     std::atomic<int> imageRequests{0};
     std::atomic<int> nextRequests{0};
+    std::atomic<int> formRequests{0};
 
 private:
     SOCKET listener_ = INVALID_SOCKET;
@@ -130,6 +131,17 @@ private:
                     body = "document.getElementById('app').innerHTML="
                            "'<h1>Contenido externo</h1>';"
                            "document.title='Externo ejecutado';";
+                } else if (request.find("GET /form ") != std::string::npos) {
+                    body = "<html><head><title>Formulario real</title></head><body>"
+                           "<form action='/submitted' method='get'>"
+                           "<input name='q' placeholder='Buscar'>"
+                           "<input type='hidden' name='lang' value='es'>"
+                           "<input type='submit' value='Buscar'>"
+                           "</form></body></html>";
+                } else if (request.find("GET /submitted?q=prueba&lang=es ") != std::string::npos) {
+                    ++formRequests;
+                    body = "<html><head><title>Formulario enviado</title></head>"
+                           "<body><h1>Consulta recibida</h1></body></html>";
                 } else if (request.find("GET /next ") != std::string::npos) {
                     ++nextRequests;
                     body = "<html><head><title>Destino de prueba</title></head><body><h1>Correcto</h1></body></html>";
@@ -566,6 +578,33 @@ int wmain(int argc, wchar_t** argv) {
             }, 14000), "Script-generated HTML did not reach the live renderer");
             CaptureScreenshot(scripted.Window(), "AnotherChance-scripted-dom.bmp");
             std::cout << "PASS: inline script generates visible native DOM\n";
+        }
+        {
+            BrowserProcess controls(argv[1],
+                L"http://127.0.0.1:" + std::to_wstring(server.Port()) +
+                L"/form");
+            Check(Until([&] {
+                return controls.IsAlive() &&
+                    controls.HasTitle(L"Formulario real") &&
+                    SendMessageW(controls.Window(),WM_APP+45,0,0)==2;
+            },12000),"HTML form did not create native Windows input controls");
+            HWND input = FindWindowExW(controls.Window(),nullptr,L"Edit",nullptr);
+            Check(input!=nullptr,"missing address input");
+            input = FindWindowExW(controls.Window(),input,L"Edit",nullptr);
+            Check(input!=nullptr && IsWindowVisible(input),
+                  "page input must be a live visible Win32 Edit");
+            SetWindowTextW(input,L"prueba");
+            HWND submit = FindWindowExW(controls.Window(),nullptr,L"Button",nullptr);
+            Check(submit!=nullptr && IsWindowVisible(submit),
+                  "page submit must be a visible Win32 Button");
+            CaptureScreenshot(controls.Window(),"AnotherChance-real-form.bmp");
+            SendMessageW(submit,BM_CLICK,0,0);
+            Check(Until([&] {
+                return controls.IsAlive() &&
+                    controls.HasTitle(L"Formulario enviado") &&
+                    server.formRequests.load()>0;
+            },15000),"native form GET submission did not navigate");
+            std::cout<<"PASS: native HTML input, button, hidden fields and GET submit\n";
         }
         {
             BrowserProcess scripted(argv[1],

@@ -7,6 +7,7 @@
 #include "image/ImageStore.h"
 #include "window/Chrome.h"
 #include "util/Url.h"
+#include "forms/NativeFormControls.h"
 #include <unordered_set>
 #include <windows.h>
 #include <condition_variable>
@@ -96,6 +97,7 @@ private:
     std::unique_ptr<html::Document> document_;
     style::Sheet sheet_;
     layout::PageLayout layout_;
+    forms::NativeFormControls formControls_;
     image::Store images_;
     int scrollY_ = 0;
     int wheelRemainder_ = 0;

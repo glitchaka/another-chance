@@ -130,3 +130,8 @@ compatibilidad, y nunca debe convertirse en un falso resultado positivo.
 ## Controles HTML representados en el layout
 
 El layout crea una lista separada de ubicaciones de controles `<input>`, `<textarea>`, `<button>` y `<select>`; no vuelve a sustituirlos por textos entre corchetes. El administrador nativo `src/forms` se encarga de representar esos controles y conservar sus valores al cambiar el ancho o desplazar el documento. Las entradas ocultas siguen fuera de pantalla.
+
+
+## Formularios HTML nativos
+
+Las etiquetas `input`, `textarea`, `button` y `select` ahora se dibujan mediante controles Win32 propios y son editables. Se conservan sus valores al desplazar y recalcular el layout, se incluye la información de campos `hidden` al enviar GET y se implementan los botones submit/reset. Enter en un campo de texto también solicita el envío. El motor todavía no implementa POST, cookies de sesión completas, eventos de JavaScript ni todos los requisitos HTML5.
