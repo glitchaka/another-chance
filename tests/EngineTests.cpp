@@ -53,6 +53,32 @@ void TestStyles() {
     Check(styled.color == RGB(0x20,0x40,0x60), "simple CSS class selector");
     const auto link = sheet.Compute(*anchor, parent);
     Check(link.bold && link.underline, "link style and CSS font weight");
+
+    auto hidden = ac::html::Parse(
+        "<form><input type='hidden' value='INTERNAL_TOKEN'>"
+        "<input type='HIDDEN' value='INTERNAL_TOKEN_2'>"
+        "<div hidden>SECRET</div>"
+        "<section style='display:none'>NOT_VISIBLE</section>"
+        "<aside style='visibility:hidden'>NOT_VISIBLE_2</aside>"
+        "<input type='text' placeholder='Buscar'></form>");
+    auto* input = Find(*hidden.root, "input");
+    auto* div = Find(*hidden.root, "div");
+    auto* section = Find(*hidden.root, "section");
+    auto* aside = Find(*hidden.root, "aside");
+    Check(input && div && section && aside, "hidden fixture nodes");
+    Check(sheet.Compute(*input, parent).hidden, "hidden input must not render");
+    Check(sheet.Compute(*div, parent).hidden, "boolean hidden attribute must hide");
+    Check(sheet.Compute(*section, parent).hidden, "CSS display:none must hide");
+    Check(sheet.Compute(*aside, parent).hidden, "CSS visibility:hidden must hide");
+
+    const auto secondInput = Find(*hidden.root->children.front(), "input");
+    (void)secondInput;
+    const auto form = Find(*hidden.root, "form");
+    Check(form && form->children.size() == 6, "form fixture has six controls");
+    Check(sheet.Compute(*form->children[1], parent).hidden,
+          "input type case-insensitive hidden");
+    Check(!sheet.Compute(*form->children[5], parent).hidden,
+          "normal input remains visible");
 }
 void TestScreenRects() {
     using ac::tech::idScreenRect;

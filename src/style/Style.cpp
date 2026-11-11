@@ -157,6 +157,8 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
         if (value == "none") style.hidden = true;
         else if (value == "block" || value == "flex" || value == "grid") style.block = true;
         else if (value == "inline") style.block = false;
+    } else if (key == "visibility") {
+        if (value == "hidden" || value == "collapse") style.hidden = true;
     } else if (key == "margin-top" || key == "margin-bottom") {
         char* end = nullptr;
         const long amount = std::strtol(value.c_str(), &end, 10);
@@ -206,7 +208,8 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     if (tag == "head" || tag == "title" || tag == "script" ||
         tag == "style" || tag == "meta" || tag == "link" ||
         tag == "noscript" || tag == "svg" || tag == "canvas" ||
-        tag == "template") result.hidden = true;
+        tag == "template" || tag == "base" || tag == "source")
+        result.hidden = true;
     if (tag == "a") {
         result.color = RGB(20, 87, 180);
         result.underline = true;
@@ -235,6 +238,12 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
         for (const auto& [key,value] : ParseDeclarations(inlineCss)) {
             Apply(result, key, value);
         }
+    }
+    // Boolean HTML "hidden" is a presence attribute. Hidden inputs must
+    // not leak values or tokens into rendered text even if CSS overrides display.
+    if (node.attributes.contains("hidden") ||
+        (tag == "input" && Lower(node.Attribute("type")) == "hidden")) {
+        result.hidden = true;
     }
     return result;
 }

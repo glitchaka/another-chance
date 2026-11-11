@@ -181,12 +181,29 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         lineHeight_ = 24;
         return;
     }
-    if (tag == "input" || tag == "button" || tag == "textarea") {
-        const auto label = node.Attribute("placeholder");
-        const auto value = node.Attribute("value");
-        AppendText(dc, L"[ " + ac::url::ToWide(!value.empty() ? value :
-                   (!label.empty() ? label : node.Attribute("type"))) + L" ]",
-                   computed, link);
+    if (tag == "input") {
+        const auto type = node.Attribute("type");
+        if (type == "hidden" || node.attributes.contains("hidden")) return;
+        // Placeholders are non-interactive until native form widgets exist.
+        // Never show the internal value of a password or hidden control.
+        if (type == "submit" || type == "button" || type == "reset") {
+            const auto label = node.Attribute("value");
+            AppendText(dc, L"[ " + ac::url::ToWide(
+                label.empty() ? "Enviar" : label) + L" ]", computed, link);
+        } else if (type == "checkbox" || type == "radio") {
+            AppendText(dc, type == "checkbox" ? L"□ " : L"○ ", computed, link);
+        } else if (type == "password") {
+            AppendText(dc, L"[ Contraseña ]", computed, link);
+        } else if (type == "text" || type == "search" || type == "email" ||
+                   type == "url" || type == "tel" || type.empty()) {
+            const auto label = node.Attribute("placeholder");
+            AppendText(dc, L"[ " + ac::url::ToWide(
+                label.empty() ? "Campo de texto" : label) + L" ]", computed, link);
+        }
+        return;
+    }
+    if (tag == "textarea") {
+        AppendText(dc, L"[ Área de texto ]", computed, link);
         return;
     }
 
