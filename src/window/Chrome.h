@@ -11,7 +11,9 @@ namespace ac::chrome {
 // holds navigation, address input and the page actions.
 constexpr int kTabRowHeight = 34;
 constexpr int kToolbarHeight = 76;
-constexpr int kStatusHeight = 23;
+// Status is retained as an internal accessibility/test value, not a
+// permanent developer-style footer in the browsing surface.
+constexpr int kStatusHeight = 0;
 constexpr WORD kTabCommandBase = 300;
 
 struct Tab {
