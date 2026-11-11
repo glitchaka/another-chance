@@ -656,9 +656,9 @@ void BrowserWindow::Paint() {
 LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
         case WM_NCCALCSIZE:
-            // Remove the caption and all native nonclient painting.
-            if (wparam == TRUE) return 0;
-            break;
+            // Client geometry always occupies the entire window rectangle,
+            // including the initial (wParam==FALSE) calculation.
+            return 0;
         case WM_NCPAINT:
             return 0;
         case WM_NCACTIVATE:
