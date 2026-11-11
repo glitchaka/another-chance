@@ -468,6 +468,21 @@ int wmain(int argc, wchar_t** argv) {
         Check(wcscmp(homeStatus, L"Listo") == 0,
               "Home tab still displays internal engine diagnostics");
         CaptureScreenshot(browser.Window(), "AnotherChance-tabbed-ui.bmp");
+        // Real pointer-based tab interactions, not direct WM_COMMAND shortcuts.
+        const LRESULT countBefore=SendMessageW(browser.Window(),WM_APP+43,0,0);
+        Check(countBefore==2,"new tab command should create two visible tabs");
+        PostMessageW(browser.Window(),WM_LBUTTONUP,0,MAKELPARAM(470,18));
+        Check(Until([&] {
+            return SendMessageW(browser.Window(),WM_APP+43,0,0)==3 &&
+                   SendMessageW(browser.Window(),WM_APP+44,0,0)==2;
+        },5000),"new-tab '+' button was not clickable");
+        // Close the active tab by clicking its close button.
+        // At three tabs each has 224px; the third is x=456..677.
+        PostMessageW(browser.Window(),WM_LBUTTONUP,0,MAKELPARAM(655,18));
+        Check(Until([&] {
+            return SendMessageW(browser.Window(),WM_APP+43,0,0)==2;
+        },5000),"tab close button was not clickable");
+        std::cout << "PASS: add and close native tabs with pointer clicks\n";
         std::cout << "PASS: create and activate a new tab\n";
 
         PostMessageW(browser.Window(), WM_COMMAND, MAKEWPARAM(300, 0), 0);

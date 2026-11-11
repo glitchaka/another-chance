@@ -678,7 +678,7 @@ void BrowserWindow::DrawContent(HDC dc) {
     DeleteObject(paper);
     if (document_ && layout_.HasVisibleContent()) {
         layout_.Draw(dc, view.top, scrollY_, view);
-    } else if (document_) {
+    } else if (document_ && !currentUrl_.empty()) {
         // A successful HTTP response can still contain no renderable content
         // (for example, a JS-only application shell). Never display a silent
         // white screen that suggests the page finished rendering correctly.
@@ -838,6 +838,10 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return static_cast<LRESULT>(scrollY_);
         case WM_APP + 42:
             return layout_.HasVisibleContent() ? 1 : 0;
+        case WM_APP + 43:
+            return static_cast<LRESULT>(tabs_.size());
+        case WM_APP + 44:
+            return static_cast<LRESULT>(activeTab_);
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
