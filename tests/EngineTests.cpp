@@ -340,8 +340,8 @@ void TestHtmlEncoding() {
     const std::string cp1252="<meta charset='windows-1252'>\x80";
     Check(ac::html::DecodeToUtf8(cp1252).find("\xE2\x82\xAC")!=std::string::npos,
           "meta charset windows-1252 resolves euro symbol");
-    const std::string utf16="\xFF\xFE" "H\0i\0" ;
-    Check(ac::html::DecodeToUtf8(std::string_view(utf16.data(),6))=="Hi",
+    const std::string utf16(std::string("\xFF\xFE") + std::string("H\0i\0",4));
+    Check(ac::html::DecodeToUtf8(utf16)=="Hi",
           "UTF-16LE BOM decoding");
     Check(ac::html::DecodeToUtf8("La ciudad")=="La ciudad",
           "UTF-8 no-op decoding");
