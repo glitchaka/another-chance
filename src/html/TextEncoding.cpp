@@ -116,9 +116,14 @@ std::string DecodeToUtf8(std::string_view bytes,
         // Meta charset is typically within the first 1024 document bytes.
         // Ignore script payloads or bodies beyond the encoding sniff window.
         const std::string prefix=Lower(bytes.substr(0,std::min<size_t>(1024,bytes.size())));
-        const auto tag=prefix.find("<meta");
-        if(tag!=std::string::npos)
-            label=Charset(std::string_view(prefix).substr(tag));
+        size_t pos=0;
+        while((pos=prefix.find("<meta",pos))!=std::string::npos) {
+            const auto end=prefix.find('>',pos);
+            if(end==std::string::npos) break;
+            label=Charset(std::string_view(prefix).substr(pos,end-pos));
+            if(!label.empty()) break;
+            pos=end+1;
+        }
     }
     if(label=="utf-16" || label=="utf-16le") return Utf16(bytes,false);
     if(label=="utf-16be") return Utf16(bytes,true);
