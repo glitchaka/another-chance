@@ -1,4 +1,5 @@
 #include "html/HtmlParser.h"
+#include "html/TextEncoding.h"
 #include "script/ScriptRuntime.h"
 #include <unordered_map>
 #include "style/Style.h"
@@ -331,6 +332,21 @@ void TestScriptDom() {
     DeleteDC(dc);
 }
 
+void TestHtmlEncoding() {
+    const std::string latin1="<html><body>Espa\xF1ol</body></html>";
+    const auto converted=ac::html::DecodeToUtf8(latin1,L"text/html; charset=ISO-8859-1");
+    Check(converted.find("Espa\xC3\xB1ol")!=std::string::npos,
+          "Latin1 HTML must decode to UTF-8");
+    const std::string cp1252="<meta charset='windows-1252'>\x80";
+    Check(ac::html::DecodeToUtf8(cp1252).find("\xE2\x82\xAC")!=std::string::npos,
+          "meta charset windows-1252 resolves euro symbol");
+    const std::string utf16="\xFF\xFE" "H\0i\0" ;
+    Check(ac::html::DecodeToUtf8(std::string_view(utf16.data(),6))=="Hi",
+          "UTF-16LE BOM decoding");
+    Check(ac::html::DecodeToUtf8("La ciudad")=="La ciudad",
+          "UTF-8 no-op decoding");
+}
+
 void TestDisplayCascade() {
     auto document = ac::html::Parse(
         "<html><body><div id='one' class='show'>VISIBLE</div>"
@@ -397,6 +413,7 @@ int main() {
     try {
         TestHtml();
         TestStyles();
+        TestHtmlEncoding();
         TestDisplayCascade();
         TestUrls();
         TestScriptDom();

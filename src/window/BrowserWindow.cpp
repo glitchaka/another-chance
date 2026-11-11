@@ -1,6 +1,7 @@
 #include "window/BrowserWindow.h"
 #include "util/Url.h"
 #include "script/ScriptRuntime.h"
+#include "html/TextEncoding.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -264,9 +265,12 @@ void BrowserWindow::WorkerLoop() {
                     "<h1>Formato no admitido</h1><p>Esta versión no incorpora visor PDF.</p>");
             } else if (response.contentType.find(L"text/plain") != std::wstring::npos) {
                 result->document = html::Parse(
-                    "<h1>Documento de texto</h1><p>" + EscapeHtml(response.body) + "</p>");
+                    "<h1>Documento de texto</h1><p>" +
+                    EscapeHtml(html::DecodeToUtf8(response.body,response.contentType)) +
+                    "</p>");
             } else {
-                result->document = html::Parse(response.body);
+                result->document = html::Parse(
+                    html::DecodeToUtf8(response.body,response.contentType));
                 std::vector<std::wstring> scriptUrls;
                 std::unordered_set<std::wstring> visited;
                 if (result->document.root) {
