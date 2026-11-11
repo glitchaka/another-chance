@@ -48,7 +48,7 @@ int CssPixels(std::string_view input, int fallback) {
 }
 void CssEdges(std::string_view shorthand, int& top, int& right,
               int& bottom, int& left) {
-    std::istringstream input(std::string(shorthand));
+    std::istringstream input{std::string(shorthand)};
     std::vector<int> values;
     std::string token;
     while (input >> token && values.size() < 4) {
