@@ -215,8 +215,7 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
     if (tag == "input" || tag == "textarea" || tag == "button" ||
         tag == "select") {
         const std::string type = node.Attribute("type");
-        if (type == "hidden" || node.attributes.contains("hidden") ||
-            node.attributes.contains("disabled")) return;
+        if (type == "hidden" || node.attributes.contains("hidden")) return;
 
         Control control{};
         control.node = &node;

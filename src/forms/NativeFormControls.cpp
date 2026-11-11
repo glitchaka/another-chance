@@ -47,6 +47,8 @@ std::wstring DefaultValue(const html::Node& node,Kind kind) {
     if (kind==Kind::Submit || kind==Kind::Button || kind==Kind::Reset) {
         const std::string label=node.Attribute("value");
         if (!label.empty()) return url::ToWide(label);
+        const auto text=TextOf(node);
+        if (!text.empty()) return text;
         return kind==Kind::Reset ? L"Restablecer" : L"Enviar";
     }
     return url::ToWide(node.Attribute("value"));
@@ -59,7 +61,8 @@ const html::Node* FindForm(const html::Node* node) {
     return nullptr;
 }
 bool IsField(const html::Node& node) {
-    return node.tag=="input" || node.tag=="textarea" || node.tag=="select";
+    return node.tag=="input" || node.tag=="textarea" ||
+           node.tag=="select" || node.tag=="button";
 }
 void CollectNamed(const html::Node& node,
                   std::vector<const html::Node*>& out) {
@@ -156,6 +159,7 @@ void NativeFormControls::Sync(HWND parent,HINSTANCE instance,
         const bool select=kind==Kind::Select;
         const wchar_t* cls=button ? L"BUTTON" : select ? L"COMBOBOX" : L"EDIT";
         DWORD style=WS_CHILD|WS_VISIBLE|WS_TABSTOP;
+        if(item.node->attributes.contains("disabled")) style|=WS_DISABLED;
         if (button) {
             if (kind==Kind::Checkbox) style|=BS_AUTOCHECKBOX;
             else if(kind==Kind::Radio) style|=BS_AUTORADIOBUTTON;
@@ -252,7 +256,8 @@ FormRequest NativeFormControls::BuildRequest(HWND initiator,
         if(name.empty()) continue;
         const std::string type=node->Attribute("type");
         if(type=="reset" || type=="button" || type=="file") continue;
-        if(type=="submit" && node!=sender->node) continue;
+        if((type=="submit" || type=="image" || node->tag=="button") &&
+           node!=sender->node) continue;
         std::wstring value;
         if(type=="hidden") {
             value=url::ToWide(node->Attribute("value"));
