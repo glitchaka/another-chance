@@ -602,6 +602,18 @@ int wmain(int argc, wchar_t** argv) {
             }
             wchar_t typed[64]{};
             GetWindowTextW(input,typed,64);
+            if (std::wstring_view(typed)!=L"prueba") {
+                const auto result=SendMessageW(input,WM_SETTEXT,0,
+                    reinterpret_cast<LPARAM>(L"prueba"));
+                GetWindowTextW(input,typed,64);
+                wchar_t name[80]{};
+                GetClassNameW(input,name,80);
+                std::wcerr<<L"FORM INPUT DIAG: WM_SETTEXT="<<result
+                    <<L" class=["<<name<<L"] text=["<<typed
+                    <<L"] visible="<<IsWindowVisible(input)
+                    <<L" alive="<<controls.IsAlive()<<L"\n";
+                CaptureScreenshot(controls.Window(),"AnotherChance-real-form.bmp");
+            }
             Check(std::wstring_view(typed)==L"prueba",
                   "native HTML input did not accept typed characters");
             HWND submit = FindWindowExW(controls.Window(),nullptr,L"Button",nullptr);
