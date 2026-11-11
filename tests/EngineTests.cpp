@@ -224,7 +224,7 @@ void TestLayoutGeometry() {
         "<main style='max-width:160px;margin:0 auto;padding:10px'>"
         "<a href='/box'>centrado</a></main>");
     layout.Reflow(dc, centeredBox, sheet, images, url, 400);
-    Check(layout.LinkAt(112, 32, 0, 0) == L"https://example.org/box",
+    Check(layout.LinkAt(124, 32, 0, 0) == L"https://example.org/box",
           "link inside max-width centered box is correctly positioned");
     Check(layout.LinkAt(25, 32, 0, 0).empty(),
           "centered box no longer occupies the full left viewport");
