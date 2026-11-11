@@ -175,27 +175,104 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
     }
 }
 
-bool Sheet::Matches(const html::Node& node, std::string_view fullSelector) {
+namespace {
+// Limited, original CSS selector implementation: tag, class, id,
+// descendant and direct-child combinators (not pseudoclasses).
+bool MatchesSimple(const html::Node& node, std::string_view selector) {
     if (node.type != html::Node::Type::Element) return false;
-    // Level 1: simple selectors only. Child/descendant selectors not yet supported.
-    std::string selector = Trim(fullSelector);
-    if (selector.find_first_of(" >+~[:") != std::string::npos) return false;
-    if (selector == "*") return true;
+    if (selector.empty() || selector.find_first_of("[:+~") != std::string_view::npos)
+        return false;
     size_t pos = 0;
-    while (pos < selector.size() && selector[pos] != '.' && selector[pos] != '#') ++pos;
-    if (pos && node.tag != selector.substr(0, pos)) return false;
+    if (selector.front() == '*') {
+        ++pos;
+    } else {
+        while (pos < selector.size() && selector[pos] != '.' &&
+               selector[pos] != '#') ++pos;
+        if (pos && node.tag != selector.substr(0, pos)) return false;
+    }
     while (pos < selector.size()) {
         const char sigil = selector[pos++];
+        if (sigil != '.' && sigil != '#') return false;
         const size_t start = pos;
-        while (pos < selector.size() && selector[pos] != '.' && selector[pos] != '#') ++pos;
-        if (start == pos) return false;
-        const std::string value = selector.substr(start, pos - start);
+        while (pos < selector.size() && selector[pos] != '.' &&
+               selector[pos] != '#') ++pos;
+        if (pos == start) return false;
+        const std::string value(selector.substr(start, pos - start));
         if (sigil == '#') {
             if (node.Attribute("id") != value) return false;
-        } else if (sigil == '.') {
-            const std::string classes = " " + node.Attribute("class") + " ";
-            if (classes.find(" " + value + " ") == std::string::npos) return false;
+        } else {
+            std::istringstream tokens(node.Attribute("class"));
+            std::string token;
+            bool found = false;
+            while (tokens >> token) {
+                if (token == value) { found = true; break; }
+            }
+            if (!found) return false;
         }
+    }
+    return true;
+}
+
+struct SelectorParts {
+    std::vector<std::string> simple;
+    std::vector<char> relation;
+};
+SelectorParts SplitSelector(std::string_view value) {
+    SelectorParts parts;
+    size_t i = 0;
+    char relation = ' ';
+    while (i < value.size()) {
+        if (std::isspace(static_cast<unsigned char>(value[i]))) {
+            ++i; continue;
+        }
+        if (value[i] == '>') {
+            relation = '>';
+            ++i; continue;
+        }
+        const size_t start = i;
+        while (i < value.size() &&
+               value[i] != '>' &&
+               !std::isspace(static_cast<unsigned char>(value[i]))) ++i;
+        if (start == i) { ++i; continue; }
+        if (!parts.simple.empty()) parts.relation.push_back(relation);
+        parts.simple.emplace_back(value.substr(start, i - start));
+        relation = ' ';
+    }
+    return parts;
+}
+int Specificity(std::string_view selector) {
+    const auto parts = SplitSelector(selector);
+    int score = 0;
+    for (const auto& item : parts.simple) {
+        if (!item.empty() && item.front() != '*' &&
+            item.front() != '.' && item.front() != '#') ++score;
+        for (char c : item) {
+            if (c == '.') score += 10;
+            if (c == '#') score += 100;
+        }
+    }
+    return score;
+}
+} // namespace
+
+bool Sheet::Matches(const html::Node& node, std::string_view fullSelector) {
+    const auto selector = SplitSelector(fullSelector);
+    if (selector.simple.empty()) return false;
+    const html::Node* current = &node;
+    size_t i = selector.simple.size() - 1;
+    if (!MatchesSimple(*current, selector.simple[i])) return false;
+    while (i > 0) {
+        const char relation = selector.relation[i - 1];
+        current = current->parent;
+        if (relation == '>') {
+            if (!current || !MatchesSimple(*current, selector.simple[i - 1]))
+                return false;
+        } else {
+            while (current && !MatchesSimple(*current, selector.simple[i - 1]))
+                current = current->parent;
+            if (!current) return false;
+        }
+        --i;
     }
     return true;
 }
@@ -240,9 +317,23 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
     else if (tag == "small") result.fontSize = std::max(9, result.fontSize - 2);
     else if (tag == "code" || tag == "pre") result.background = RGB(246,247,249);
 
-    for (const auto& rule : rules_) {
-        if (Matches(node, rule.selector)) {
-            for (const auto& [key,value] : rule.declarations) Apply(result, key, value);
+    // Apply by CSS specificity first, preserving source order on ties.
+    // This remains a subset: no !important, @media, pseudo-classes, or
+    // full CSS cascade layers.
+    struct MatchedRule { int score; size_t order; const Rule* rule; };
+    std::vector<MatchedRule> matched;
+    for (size_t i = 0; i < rules_.size(); ++i) {
+        if (Matches(node, rules_[i].selector)) {
+            matched.push_back({Specificity(rules_[i].selector), i, &rules_[i]});
+        }
+    }
+    std::stable_sort(matched.begin(), matched.end(),
+        [](const MatchedRule& a, const MatchedRule& b) {
+            return a.score < b.score;
+        });
+    for (const auto& match : matched) {
+        for (const auto& [key,value] : match.rule->declarations) {
+            Apply(result, key, value);
         }
     }
     const auto inlineCss = node.Attribute("style");

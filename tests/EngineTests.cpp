@@ -97,6 +97,26 @@ void TestStyles() {
     const auto* p = Find(*styledCenter.root, "p");
     Check(p && sheet.Compute(*p, parent).textAlign ==
         ac::style::TextAlign::Right, "CSS text-align:right");
+
+    auto nested = ac::html::Parse(
+        "<main id='app'><div class='panel'><p class='title'>Hello</p></div></main>");
+    const auto* inner = Find(*nested.root, "p");
+    const auto* wrapper = Find(*nested.root, "div");
+    Check(inner && wrapper, "nested selector nodes");
+    ac::style::Sheet cascade;
+    cascade.Parse("#app .title {color:#123456;} "
+                  "main > div {font-weight:bold;} "
+                  ".panel > p {text-align:center;} "
+                  "p {color:red;} "
+                  "main > p {display:none;}");
+    const auto result = cascade.Compute(*inner, parent);
+    Check(result.color == RGB(0x12,0x34,0x56),
+          "higher specificity beats later tag rule");
+    Check(result.textAlign == ac::style::TextAlign::Center,
+          "direct-child selector works");
+    Check(!result.hidden, "nonmatching direct child must not hide");
+    Check(cascade.Compute(*wrapper, parent).bold,
+          "direct-child style on div");
 }
 void TestScreenRects() {
     using ac::tech::idScreenRect;
