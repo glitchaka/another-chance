@@ -75,4 +75,9 @@ Las palabras o frases sin dirección se envían al buscador configurado en el me
 
 ## Icono de aplicación
 
-El ejecutable incorpora el recurso ICON (ID 101) en `assets/anotherchance.ico`, con tamaños 16/24/32/48/64/128/256. Win32 lo carga como icono grande y pequeño de la clase; Windows Explorer y la barra de tareas reciben el icono incrustado en el .exe. El icono es una identidad geométrica original de Another Chance (fondo azul profundo, flecha circular verde agua y una A blanca). La prueba `BrowserEndToEnd` verifica que el EXE tenga un icono real y que la ventana registre su HICON.
+El ejecutable incorpora el recurso ICON (ID 101) en `assets/anotherchance.ico`, con tamaños 16/24/32/48/64/128/256. Win32 lo carga como icono grande y pequeño de la clase; Windows Explorer y la barra de tareas reciben el icono incrustado en el .exe. El icono es una identidad original de Another Chance: dos rutas divergentes, sin monogramas ni letras, con una señal de dirección verde agua y un punto de partida cálido sobre fondo azul profundo. La prueba `BrowserEndToEnd` verifica que el EXE tenga un icono real y que la ventana registre su HICON.
+
+
+## Pantalla de inicio y cabecera
+
+La pantalla de inicio ya no muestra textos de demostración ni enlaces a páginas de prueba: abre un documento vacío, deja el foco en la barra de direcciones y permite navegar o buscar inmediatamente. La cabecera reserva el ancho necesario para escribir "Another Chance" sin truncarlo. El icono del encabezado se dibuja con el mismo recurso HICON del ejecutable, sin duplicar el diseño con trazos manuales.

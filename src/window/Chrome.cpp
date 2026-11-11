@@ -109,10 +109,10 @@ void WindowIcon(Graphics& g, Action a, int x, int y, bool maximized) {
 Geometry Measure(int width){
     const int w=std::max(860,width);
     Geometry g;
-    g.home=Area(10,8,124,40);
-    g.back=Area(140,10,30,36);
-    g.forward=Area(174,10,30,36);
-    g.address=Area(215,10,std::max(150,w-215-309),36);
+    g.home=Area(10,8,162,40);
+    g.back=Area(177,10,30,36);
+    g.forward=Area(211,10,30,36);
+    g.address=Area(251,10,std::max(150,w-251-309),36);
     g.reload=Area(w-302,10,31,36);
     g.bookmark=Area(w-268,10,31,36);
     g.tabs=Area(w-231,10,67,36);
@@ -155,17 +155,17 @@ void Draw(HDC dc,int width,int height,const std::vector<Tab>& tabs,
     g.DrawLine(&edge,0,kToolbarHeight-1,width,kToolbarHeight-1);
 
     const Geometry geom=Measure(width);
-    // Compact application identity, no oversized monogram.
-    Rounded(g, RectF(12.0f, 12.0f, 31.0f, 31.0f), 7.0f,
-            Color(255, 22, 43, 64));
-    // Brand glyph echoes the actual embedded icon at compact sizes.
-    Stroke(g, Color(255,250,253,255),2.7f,PointF(22.0f,35.0f),PointF(27.5f,20.0f));
-    Stroke(g, Color(255,250,253,255),2.7f,PointF(27.5f,20.0f),PointF(33.0f,35.0f));
-    Stroke(g, Color(255,250,253,255),2.4f,PointF(23.8f,30.0f),PointF(31.2f,30.0f));
-    Text(g,L"Another Chance",RectF(49,11,87,34),12,kInk,true);
+    // Always draw the same bundled icon used by Explorer and the taskbar.
+    const auto appIcon = reinterpret_cast<HICON>(LoadImageW(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(101),
+        IMAGE_ICON, 28, 28, LR_SHARED));
+    if (appIcon) {
+        DrawIconEx(dc, 12, 14, appIcon, 28, 28, 0, nullptr, DI_NORMAL);
+    }
+    Text(g,L"Another Chance",RectF(48,11,121,34),12,kInk,true);
 
-    Arrow(g,155,28,true,canBack?kInk:kDim);
-    Arrow(g,189,28,false,canForward?kInk:kDim);
+    Arrow(g,192,28,true,canBack?kInk:kDim);
+    Arrow(g,226,28,false,canForward?kInk:kDim);
 
     const RECT a=geom.address;
     Rounded(g,RectF(static_cast<REAL>(a.left),static_cast<REAL>(a.top),

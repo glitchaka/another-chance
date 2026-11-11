@@ -185,6 +185,7 @@ void BrowserWindow::OnCreate() {
     worker_ = std::thread(&BrowserWindow::WorkerLoop, this);
     TraceBoot("OnCreate: worker started");
     ShowHome();
+    if (initialUrl_.empty()) SetFocus(address_);
     if (!initialUrl_.empty()) {
         Navigate(initialUrl_, true);
     }
@@ -322,22 +323,11 @@ void BrowserWindow::ShowHome() {
     historyIndex_ = 0;
     scrollY_ = 0;
     images_.Clear();
-    document_ = std::make_unique<html::Document>(html::Parse(R"HTML(
-        <html><head><title>Otra oportunidad</title>
-        <style>
-            h1 { color: #263d60; font-size: 32px; }
-            p { color: #586d8a; font-size: 17px; }
-            a { color: #2979d4; }
-        </style></head>
-        <body>
-          <h1>Another Chance</h1>
-          <p>Una nueva forma de explorar. Navegador nativo con motor propio.</p>
-          <p>Escribe una dirección o búsqueda en la barra superior.</p>
-          <p><a href="https://example.org/">Visitar la página de ejemplo</a></p>
-          <p>Versión experimental: algunos sitios requieren tecnologías
-             que todavía no están implementadas.</p>
-        </body></html>
-    )HTML"));
+    // New tabs must be real blank workspaces, not a demo page.
+    // Address/search input remains available in the native chrome.
+    document_ = std::make_unique<html::Document>(
+        html::Parse("<!doctype html><html><head><title>Nueva pestaña</title>"
+                    "</head><body></body></html>"));
     sheet_.Parse(document_->embeddedCss);
     tabs_[activeTab_].title = L"Nueva pestaña";
     tabs_[activeTab_].url.clear();
@@ -347,7 +337,7 @@ void BrowserWindow::ShowHome() {
     SetWindowTextW(address_, L"");
     SetWindowTextW(hwnd_, L"Another Chance");
     Reflow();
-    SetStatus(L"Listo · HTML/CSS propio · Sin Chromium ni Firefox");
+    SetStatus(L"Listo");
     UpdateButtons();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }

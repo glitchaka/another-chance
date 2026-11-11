@@ -445,6 +445,11 @@ int wmain(int argc, wchar_t** argv) {
         Check(Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Another Chance") && !browser.HasHttp200(); }, 8000),
               "New tab did not open its home page");
+        HWND statusLabel = FindWindowExW(browser.Window(), nullptr, L"Static", nullptr);
+        wchar_t homeStatus[256]{};
+        if (statusLabel) GetWindowTextW(statusLabel, homeStatus, 256);
+        Check(wcscmp(homeStatus, L"Listo") == 0,
+              "Home tab still displays internal engine diagnostics");
         std::cout << "PASS: create and activate a new tab\n";
 
         PostMessageW(browser.Window(), WM_COMMAND, MAKEWPARAM(300, 0), 0);
