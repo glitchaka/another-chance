@@ -60,9 +60,10 @@ void Label(Graphics& g,const std::wstring& value,RectF rect,
 }
 void ChevronArrow(Graphics& g,int x,int y,bool backward,const Color& c) {
     const float direction=backward?-1.0f:1.0f;
-    Line(g,c,1.7f,PointF(x-direction*6,y),PointF(x+direction*6,y));
-    Line(g,c,1.7f,PointF(x-direction*6,y),PointF(x,y-6));
-    Line(g,c,1.7f,PointF(x-direction*6,y),PointF(x,y+6));
+    const float tip=x+direction*6.0f;
+    Line(g,c,1.7f,PointF(x-direction*6.0f,y),PointF(tip,y));
+    Line(g,c,1.7f,PointF(tip,y),PointF(x,y-6.0f));
+    Line(g,c,1.7f,PointF(tip,y),PointF(x,y+6.0f));
 }
 void Refresh(Graphics& g,int x,int y) {
     Pen pen(kInk,1.6f);
