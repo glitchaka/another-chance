@@ -21,6 +21,47 @@ std::string Lower(std::string_view input) {
         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return out;
 }
+// Compact CSS length parser for the box model. This was previously referenced
+// by the style engine without being defined, breaking all Windows builds.
+int CssPixels(std::string_view input, int fallback) {
+    const std::string text = Lower(Trim(input));
+    if (text == "auto") return -1;
+    if (text.empty()) return fallback;
+    char* tail = nullptr;
+    const float value = std::strtof(text.c_str(), &tail);
+    if (tail == text.c_str() || !std::isfinite(value)) return fallback;
+    const std::string_view unit(tail);
+    float pixels = value;
+    if (unit == "px" || unit.empty()) {
+        // CSS numeric zero is valid without a unit.
+        if (unit.empty() && value != 0.0f) return fallback;
+    } else if (unit == "rem" || unit == "em") {
+        pixels *= 16.0f;
+    } else if (unit == "pt") {
+        pixels *= 96.0f / 72.0f;
+    } else if (unit == "pc") {
+        pixels *= 16.0f;
+    } else {
+        return fallback;
+    }
+    return static_cast<int>(std::lround(std::clamp(pixels, -4096.0f, 8192.0f)));
+}
+void CssEdges(std::string_view shorthand, int& top, int& right,
+              int& bottom, int& left) {
+    std::istringstream input(std::string(shorthand));
+    std::vector<int> values;
+    std::string token;
+    while (input >> token && values.size() < 4) {
+        const int parsed = CssPixels(token, -8192);
+        if (parsed == -8192) return;
+        values.push_back(parsed);
+    }
+    if (values.empty()) return;
+    top = values[0];
+    right = values.size() > 1 ? values[1] : top;
+    bottom = values.size() > 2 ? values[2] : top;
+    left = values.size() > 3 ? values[3] : right;
+}
 bool IsBlock(std::string_view tag) {
     return tag == "html" || tag == "body" || tag == "center" ||
         tag == "main" || tag == "article" ||
