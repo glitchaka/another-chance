@@ -258,7 +258,7 @@ private:
 };
 
 
-void CaptureScreenshot(HWND hwnd) {
+void CaptureScreenshot(HWND hwnd, const char* filename = "AnotherChance-actual.bmp") {
     RECT bounds{};
     GetWindowRect(hwnd, &bounds);
     const int width = bounds.right - bounds.left;
@@ -298,7 +298,7 @@ void CaptureScreenshot(HWND hwnd) {
         header.bfType = 0x4D42;
         header.bfOffBits = sizeof(header) + sizeof(info.bmiHeader);
         header.bfSize = header.bfOffBits + pixels;
-        std::ofstream file("AnotherChance-actual.bmp", std::ios::binary);
+        std::ofstream file(filename, std::ios::binary);
         file.write(reinterpret_cast<const char*>(&header), sizeof(header));
         file.write(reinterpret_cast<const char*>(&info.bmiHeader), sizeof(info.bmiHeader));
         file.write(reinterpret_cast<const char*>(data.data()), data.size());
@@ -437,6 +437,8 @@ int wmain(int argc, wchar_t** argv) {
                    jsBrowser.HasTitle(L"Aplicación JS") &&
                    jsBrowser.StatusContains(L"Sin contenido representable");
         }, 12000), "JS-only site did not report unsupported blank page");
+        Sleep(200);
+        CaptureScreenshot(jsBrowser.Window(), "AnotherChance-JS-fallback.bmp");
         std::cout << "PASS: JS-only HTML reports visible unsupported-page state\n";
         return 0;
     } catch (const std::exception& error) {
