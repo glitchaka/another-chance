@@ -599,6 +599,27 @@ void TestNativeObjects() {
           "computed native object fields update the DOM");
 }
 
+void TestNativeArrowCallbacks() {
+    auto document=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "const items=[1,2,3,4];"
+        "const doubled=items.map(x=>x*2);"
+        "const big=doubled.filter((x)=>x>4);"
+        "const sum=big.reduce((acc,x)=>acc+x,0);"
+        "let total=0;"
+        "items.forEach((x)=>{ total+=x; });"
+        "document.getElementById('result').textContent="
+        "String(sum)+'/'+String(total)+'/'+String(big.length);"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported==0,
+          "native JavaScript arrow functions and collection callbacks execute");
+    const auto* paragraph=Find(*document.root,"p");
+    Check(paragraph && !paragraph->children.empty() &&
+          paragraph->children.front()->text=="14/10/2",
+          "arrow callbacks, filter, reduce, and closure updates produce expected result");
+}
+
 void TestNativeFunctions() {
     auto document = ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -797,6 +818,7 @@ int main() {
         TestNativeDomInsertion();
         TestNativeControlFlow();
         TestNativeFunctions();
+        TestNativeArrowCallbacks();
         TestNativeObjects();
         TestNativeCollections();
         TestNativePrimitiveSemantics();
