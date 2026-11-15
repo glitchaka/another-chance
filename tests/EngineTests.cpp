@@ -151,6 +151,21 @@ void TestStyles() {
     Check(grid.layoutMode == ac::style::LayoutMode::Grid &&
           grid.gridColumns == 3, "grid track count parsed");
 
+    // CSS important beats normal inline declarations; inline important wins.
+    ac::style::Sheet importantSheet;
+    importantSheet.Parse(".priority { color: #112233 !important; } "
+                         ".priority { color: #aabbcc; }");
+    auto importantDoc = ac::html::Parse(
+        "<div class='priority' style='color:#445566'>Test</div>");
+    const auto* priorityNode = Find(*importantDoc.root,"div");
+    Check(priorityNode && importantSheet.Compute(*priorityNode,parent).color ==
+          RGB(0x11,0x22,0x33), "stylesheet important overrides normal inline");
+    auto inlineImportantDoc = ac::html::Parse(
+        "<div class='priority' style='color:#445566 !important'>Test</div>");
+    const auto* inlineImportant = Find(*inlineImportantDoc.root,"div");
+    Check(inlineImportant && importantSheet.Compute(*inlineImportant,parent).color ==
+          RGB(0x44,0x55,0x66), "important inline overrides stylesheet important");
+
     auto nested = ac::html::Parse(
         "<main id='app'><div class='panel'><p class='title'>Hello</p></div></main>");
     const auto* inner = Find(*nested.root, "p");
