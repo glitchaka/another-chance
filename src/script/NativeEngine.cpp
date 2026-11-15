@@ -477,6 +477,24 @@ class Interpreter {
             }
             return;
         }
+        if(Match("while")) {
+            Expect("(");
+            const size_t condition=pos_;
+            while(Peek().text!=")" && Peek().kind!=TokenKind::End) ++pos_;
+            Expect(")");
+            const size_t body=pos_;
+            SkipStatement();
+            const size_t after=pos_;
+            for(unsigned loops=0;loops<20000;++loops) {
+                Tick();
+                pos_=condition;
+                if(!Expression().value.Truth()) break;
+                pos_=body;
+                Statement();
+            }
+            pos_=after;
+            return;
+        }
         if(Match("for")) {
             Expect("(");
             if(!Match(";")) Statement();
