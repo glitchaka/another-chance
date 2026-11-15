@@ -392,6 +392,19 @@ void TestScriptDom() {
     DeleteDC(dc);
 }
 
+void TestDomQuerySelectors() {
+    auto doc = ac::html::Parse(
+        "<html><body><section class='panel featured'><span class='label'>Old</span></section>"
+        "<script>document.querySelector('.panel').innerHTML='<p id=\"dynamic\">Loaded</p>';"
+        "document.querySelector('p').textContent='Updated';</script></body></html>");
+    const auto status = ac::script::ExecuteEmbedded(doc,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "class and tag querySelector scripts execute");
+    const auto* p = Find(*doc.root,"p");
+    Check(p && !p->children.empty() && p->children.front()->text == "Updated",
+          "native querySelector DOM changes visible nodes");
+}
+
 void TestEmbeddedJavascript() {
     auto document = ac::html::Parse(
         "<html><head><title>Initial</title></head><body>"
@@ -517,6 +530,7 @@ int main() {
         TestUrls();
         TestScriptDom();
         TestEmbeddedJavascript();
+        TestDomQuerySelectors();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
