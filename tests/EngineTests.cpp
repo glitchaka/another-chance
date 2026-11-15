@@ -419,6 +419,22 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeFunctions() {
+    auto document = ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "function multiply(a, b) { return a * b; }"
+        "function decorate(n) { return 'Product: ' + multiply(n, 7); }"
+        "document.getElementById('result').textContent = decorate(6);"
+        "</script></body></html>");
+    const auto status = ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "native JavaScript executes named functions and nested calls");
+    const auto* result = Find(*document.root,"p");
+    Check(result && !result->children.empty() &&
+          result->children.front()->text == "Product: 42",
+          "JavaScript function return values update the DOM");
+}
+
 void TestNativeControlFlow() {
     auto doc = ac::html::Parse(
         "<html><body><p id='result'>Before</p><script>"
@@ -600,6 +616,7 @@ int main() {
         TestDomElementReferences();
         TestNativeDomInsertion();
         TestNativeControlFlow();
+        TestNativeFunctions();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
