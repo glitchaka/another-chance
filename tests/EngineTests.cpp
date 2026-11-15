@@ -419,6 +419,24 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativePrimitiveSemantics() {
+    auto document=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "const strict = null === undefined;"
+        "const loose = null == undefined;"
+        "const different = '1' === 1;"
+        "document.getElementById('result').textContent = "
+        "(!strict && loose && !different) ? 'PASS' : 'FAIL';"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "JavaScript primitive identity fixture parses");
+    const auto* node=Find(*document.root,"p");
+    Check(node && !node->children.empty() &&
+          node->children.front()->text=="PASS",
+          "null and undefined equality distinguish strict and loose");
+}
+
 void TestNativeCollections() {
     auto document = ac::html::Parse(
         "<html><body><p class='item'>One</p><p class='item'>Two</p><script>"
@@ -654,6 +672,7 @@ int main() {
         TestNativeFunctions();
         TestNativeObjects();
         TestNativeCollections();
+        TestNativePrimitiveSemantics();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
