@@ -425,7 +425,8 @@ void TestNativePrimitiveSemantics() {
         "const strict = null === undefined;"
         "const loose = null == undefined;"
         "const different = '1' === 1;"
-        "if (!strict && loose && !different) "
+        "const missing = document.getElementById('does-not-exist');"
+        "if (!strict && loose && !different && !missing) "
         "document.getElementById('result').textContent = 'PASS';"
         "else document.getElementById('result').textContent = 'FAIL';"
         "</script></body></html>");
