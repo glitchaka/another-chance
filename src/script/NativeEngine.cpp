@@ -170,6 +170,7 @@ class Interpreter {
     struct Function { std::vector<std::string> parameters; std::vector<Token> body; };
     std::unordered_map<std::string,Function> functions_;
     struct ReturnSignal { Value value; };
+    struct ThrowSignal { Value value; };
     struct BreakSignal {};
     struct ContinueSignal {};
     unsigned loopDepth_=0;
@@ -745,6 +746,52 @@ class Interpreter {
             if(!loopDepth_) throw std::runtime_error("continue outside loop");
             (void)Match(";");
             throw ContinueSignal{};
+        }
+        if(Match("throw")) {
+            auto error=Expression().value;
+            (void)Match(";");
+            throw ThrowSignal{error};
+        }
+        if(Match("try")) {
+            const size_t tryBody=pos_;
+            SkipStatement();
+            Expect("catch");
+            std::string binding;
+            if(Match("(")) {
+                if(Peek().kind!=TokenKind::Identifier)
+                    throw std::runtime_error("Catch identifier required");
+                binding=tokens_[pos_++].text;
+                Expect(")");
+            }
+            const size_t catchBody=pos_;
+            SkipStatement();
+            const size_t afterCatch=pos_;
+            pos_=tryBody;
+            try {
+                Statement();
+            } catch(const ThrowSignal& error) {
+                const auto saved=vars_.find(binding);
+                const bool hadPrevious=!binding.empty() && saved!=vars_.end();
+                const Value previous=hadPrevious?saved->second:Value{};
+                if(!binding.empty()) vars_[binding]=error.value;
+                pos_=catchBody;
+                try {
+                    Statement();
+                } catch(...) {
+                    if(!binding.empty()) {
+                        if(hadPrevious) vars_[binding]=previous;
+                        else vars_.erase(binding);
+                    }
+                    throw;
+                }
+                if(!binding.empty()) {
+                    if(hadPrevious) vars_[binding]=previous;
+                    else vars_.erase(binding);
+                }
+            }
+            pos_=afterCatch;
+            if(Match("finally")) Statement();
+            return;
         }
         if(Match("return")) {
             Value value;
