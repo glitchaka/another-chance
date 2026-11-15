@@ -82,7 +82,7 @@ std::wstring ImmediateMetaRefresh(const ac::html::Node& node, std::wstring_view 
 void CollectStyleSheets(const ac::html::Node& node, const std::wstring& base,
                         std::vector<std::wstring>& urls,
                         std::unordered_set<std::wstring>& known) {
-    if (urls.size() >= 4) return;
+    if (urls.size() >= 24) return;
     if (node.tag == "link" && node.Attribute("rel").find("stylesheet") != std::string::npos) {
         const auto url = ac::url::Resolve(base, ac::url::ToWide(node.Attribute("href")));
         if (ac::url::IsWeb(url) && known.insert(url).second) urls.push_back(url);
@@ -95,7 +95,7 @@ void CollectStyleSheets(const ac::html::Node& node, const std::wstring& base,
 void CollectImages(const ac::html::Node& node, const std::wstring& base,
                    std::vector<std::wstring>& urls,
                    std::unordered_set<std::wstring>& known) {
-    if (urls.size() >= 12) return;
+    if (urls.size() >= 48) return;
     if (node.tag == "img") {
         const auto url = ac::url::Resolve(base, ac::url::ToWide(node.Attribute("src")));
         if (ac::url::IsWeb(url) && known.insert(url).second) urls.push_back(url);
@@ -109,7 +109,7 @@ void CollectScriptSources(const ac::html::Node& node, const std::wstring& base,
                           std::vector<std::wstring>& sources,
                           std::unordered_set<std::wstring>& known) {
     // Restricted interpreter: cap external downloads to prevent unbounded waits.
-    if (sources.size() >= 4) return;
+    if (sources.size() >= 16) return;
     if (node.tag == "script") {
         const auto src = node.Attribute("src");
         if (!src.empty()) {
@@ -385,7 +385,7 @@ void BrowserWindow::WorkerLoop() {
                 std::lock_guard guard(taskMutex_);
                 if (stopping_) break;
             }
-            auto cssResponse = http.Get(cssUrl, 512 * 1024);
+            auto cssResponse = http.Get(cssUrl, 1024 * 1024);
             if (!cssResponse.Ok() || cssResponse.status >= 400 ||
                 cssResponse.body.empty()) continue;
             auto loadedCss = std::make_unique<LoadedStyle>();
@@ -736,7 +736,7 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
 void BrowserWindow::OnStyleReady(LoadedStyle* raw) {
     std::unique_ptr<LoadedStyle> style(raw);
     if (!style || style->generation != generation_ || !document_) return;
-    if (document_->embeddedCss.size() + style->css.size() > 2 * 1024 * 1024) return;
+    if (document_->embeddedCss.size() + style->css.size() > 8 * 1024 * 1024) return;
     document_->embeddedCss.append("\n");
     document_->embeddedCss.append(style->css);
     sheet_.Parse(document_->embeddedCss);
