@@ -143,7 +143,7 @@ class Interpreter {
     std::vector<Token> tokens_;
     size_t pos_=0;
     unsigned steps_=0;
-    struct Result {Value value;std::string path;};
+    struct Result {Value value;std::string path;Node* propertyNode=nullptr;};
     const Token& Peek() const {return tokens_[pos_];}
     bool Match(std::string_view text) {
         if(Peek().text==text) {++pos_;return true;}
@@ -184,6 +184,19 @@ class Interpreter {
         if(ac::url::IsWeb(url)) {stats_.navigation=url;++stats_.operations;}
     }
     void Write(const Result& target,const Value& value) {
+        if(target.propertyNode) {
+            const auto delimiter=target.path.rfind('|');
+            if(delimiter==std::string::npos) throw std::runtime_error("Invalid element property");
+            const auto member=target.path.substr(delimiter+1);
+            if(member=="innerHTML" || member=="textContent" || member=="innerText") {
+                SetNode(doc_,*target.propertyNode,value.String(),member=="innerHTML");
+                ++stats_.operations;
+            } else if(member=="value" || member=="id" || member=="className") {
+                target.propertyNode->attributes[member=="className"?"class":member]=value.String();
+                ++stats_.operations;
+            }
+            return;
+        }
         const auto& path=target.path;
         if(path.starts_with("$")) {vars_[path.substr(1)]=value;return;}
         const auto split=path.rfind('|');
@@ -263,6 +276,7 @@ class Interpreter {
                     else result.value={};
                 } else result.value={};
                 result.path.clear();
+                result.propertyNode=nullptr;
             } else if(Match(".")) {
                 if(Peek().kind!=TokenKind::Identifier) throw std::runtime_error("Expected member name");
                 const auto member=tokens_[pos_++].text;
@@ -296,8 +310,13 @@ class Interpreter {
                     } else if(old.value.kind==Value::Kind::Location) result.path="location|"+member;
                     else if(old.value.kind==Value::Kind::Window && member=="location")
                         result.path="location|location";
-                    else if(old.value.kind==Value::Kind::Element) result.path=old.path+"|"+member;
-                    else result.path.clear();
+                    else if(old.value.kind==Value::Kind::Element) {
+                        result.path=old.path+"|"+member;
+                        result.propertyNode=old.value.element;
+                    } else {
+                        result.path.clear();
+                        result.propertyNode=nullptr;
+                    }
                 }
             } else if(Match("++")) {
                 auto old=result.value;
