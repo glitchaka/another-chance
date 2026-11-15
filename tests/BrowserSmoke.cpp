@@ -640,11 +640,11 @@ int wmain(int argc, wchar_t** argv) {
         Check(Until([&] {
             return jsBrowser.IsAlive() &&
                    jsBrowser.HasTitle(L"Aplicación JS") &&
-                   jsBrowser.StatusContains(L"Sin contenido representable");
-        }, 12000), "JS-only site did not report unsupported blank page");
+                   jsBrowser.StatusContains(L"JavaScript:");
+        }, 12000), "JS-only site did not report its native JavaScript failure");
         Sleep(200);
         CaptureScreenshot(jsBrowser.Window(), "AnotherChance-JS-fallback.bmp");
-        std::cout << "PASS: unsupported JS remains visibly reported\n";
+        std::cout << "PASS: unsupported web API is reported as a native JavaScript error\n";
         } // JS-only browser closed
         {
             BrowserProcess scripted(argv[1],
