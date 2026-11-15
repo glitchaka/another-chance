@@ -1,0 +1,20 @@
+name: Native JavaScript Core (portable)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  native-js:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build browser-owned JavaScript core without Windows APIs
+        run: |
+          c++ -std=c++20 -Wall -Wextra -pedantic -Isrc \
+            tests/NativeJsPortable.cpp tests/PortableUrlStub.cpp \
+            src/script/NativeEngine.cpp src/script/JsLexer.cpp \
+            src/html/HtmlParser.cpp -o /tmp/another-chance-native-js-tests
+      - name: Execute native JavaScript and DOM smoke tests
+        run: /tmp/another-chance-native-js-tests
