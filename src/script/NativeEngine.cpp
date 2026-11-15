@@ -592,6 +592,44 @@ class Interpreter {
                         for(Node* node:matches) nodes.push_back(Value::NodeValue(node));
                         result={Value::ArrayValue(std::move(nodes)),{}};
                     } else if(result.value.kind==Value::Kind::Array &&
+                              result.value.array &&
+                              (member=="map" || member=="filter" ||
+                               member=="forEach" || member=="reduce")) {
+                        if(args.empty() || args[0].kind!=Value::Kind::Function)
+                            throw std::runtime_error("Array callback must be a function");
+                        const auto source=result.value.array;
+                        if(source->size()>10000)
+                            throw std::runtime_error("Array callback element limit");
+                        std::vector<Value> mapped;
+                        mapped.reserve(source->size());
+                        Value accumulator;
+                        size_t begin=0;
+                        if(member=="reduce") {
+                            if(args.size()>1) accumulator=args[1];
+                            else if(!source->empty()) accumulator=(*source)[begin++];
+                            else throw std::runtime_error("Reduce of empty array");
+                        }
+                        for(size_t index=begin; index<source->size(); ++index) {
+                            Tick();
+                            const auto& item=(*source)[index];
+                            std::vector<Value> callbackArguments;
+                            if(member=="reduce") {
+                                callbackArguments={accumulator,item,Value::Num(index),
+                                                   Value::ArrayValue(*source)};
+                            } else {
+                                callbackArguments={item,Value::Num(index),
+                                                   Value::ArrayValue(*source)};
+                            }
+                            const auto outcome=CallFunction(args[0],callbackArguments);
+                            if(member=="reduce") accumulator=outcome;
+                            else if(member=="map") mapped.push_back(outcome);
+                            else if(member=="filter" && outcome.Truth())
+                                mapped.push_back(item);
+                        }
+                        if(member=="reduce") result={accumulator,{}};
+                        else if(member=="forEach") result={};
+                        else result={Value::ArrayValue(std::move(mapped)),{}};
+                    } else if(result.value.kind==Value::Kind::Array &&
                               result.value.array && member=="push") {
                         for(const auto& argument:args) result.value.array->push_back(argument);
                         result={Value::Num(result.value.array->size()),{}};
