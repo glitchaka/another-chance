@@ -37,6 +37,10 @@ int main() {
         Test("arrows","const values=[1,2,3,4];"
              "const filtered=values.map(x=>x*2).filter(x=>x>4);"
              "document.getElementById('result').textContent=filtered.join(',');","6,8");
+        Test("collections",
+             "const elements=document.querySelectorAll('p');"
+             "const numbers=[4,5]; numbers.push(6);"
+             "elements[0].textContent=numbers.join('-');","4-5-6");
         Test("objects","let obj={a:7}; obj.a=obj.a*6;"
              "document.getElementById('result').textContent=String(obj.a);","42");
         Test("finally","function f(){try{return 42;} finally{document.title='done';}}"
