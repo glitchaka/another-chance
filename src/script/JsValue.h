@@ -12,7 +12,7 @@
 
 namespace ac::script::js {
 struct Value {
-    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math };
+    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math, Json };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
