@@ -79,6 +79,12 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("lexical-closure",
+             "const make=()=>{let count=40;return ()=>{count++;return count;};};"
+             "const next=make();"
+             "document.getElementById('result').textContent="
+             "String(next())+'/'+String(next());",
+             "41/42");
         Test("function-expression",
              "const twice=function(v){return v*2;};"
              "document.getElementById('result').textContent=String(twice(21));","42");
