@@ -419,6 +419,24 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeCollections() {
+    auto document = ac::html::Parse(
+        "<html><body><p class='item'>One</p><p class='item'>Two</p><script>"
+        "const elements = document.querySelectorAll('.item');"
+        "const numbers = [4, 5]; numbers.push(6);"
+        "elements[1].textContent = numbers.join('-');"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "DOM node collections and mutable array operations execute");
+    const auto* body=Find(*document.root,"body");
+    Check(body && body->children.size()>=2, "DOM collection fixture body");
+    const auto* second=body->children[1].get();
+    Check(second->tag=="p" && !second->children.empty() &&
+          second->children.front()->text=="4-5-6",
+          "indexed DOM collection references update matching element");
+}
+
 void TestNativeObjects() {
     auto document = ac::html::Parse(
         "<html><body><p id='result'>Before</p><script>"
@@ -635,6 +653,7 @@ int main() {
         TestNativeControlFlow();
         TestNativeFunctions();
         TestNativeObjects();
+        TestNativeCollections();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
