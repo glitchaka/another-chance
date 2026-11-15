@@ -10,7 +10,7 @@ struct Execution {
     size_t scripts = 0;
     size_t operations = 0;
     size_t unsupported = 0;
-    bool engineReady = false; // Real ECMAScript runtime successfully initialized.
+    bool engineReady = false; // Native interpreter initialized; not full ECMAScript compliance.
     std::wstring navigation; // Supported synchronous location assignment.
 };
 // Restricted stage-1 DOM string operations, not an ECMAScript engine.
