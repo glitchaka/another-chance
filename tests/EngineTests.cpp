@@ -419,6 +419,22 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeExceptions() {
+    auto document=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "function evaluate() { try { throw 'caught'; } "
+        "catch (reason) { return reason; } }"
+        "document.getElementById('result').textContent = evaluate();"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported==0,
+          "explicit JavaScript throw and catch execute inside functions");
+    const auto* node=Find(*document.root,"p");
+    Check(node && !node->children.empty() &&
+          node->children.front()->text=="caught",
+          "caught JavaScript exception returns its value");
+}
+
 void TestNativeLoopControl() {
     auto document=ac::html::Parse(
         "<html><body><p id='result'>Before</p><script>"
@@ -711,6 +727,7 @@ int main() {
         TestNativePrimitiveSemantics();
         TestNativeStandardBuiltins();
         TestNativeLoopControl();
+        TestNativeExceptions();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
