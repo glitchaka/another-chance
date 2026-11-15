@@ -5,7 +5,7 @@
 #include "style/Style.h"
 #include "layout/Layout.h"
 #include "image/ImageStore.h"
-#include "window/Chrome.h"
+#include "window/WindowFrame.h"
 #include "util/Url.h"
 #include "forms/NativeFormControls.h"
 #include <unordered_set>
@@ -32,7 +32,7 @@ public:
     static constexpr WORD kCloseTab = 107;
     static constexpr WORD kBookmark = 108;
     static constexpr WORD kHome = 109;
-    static constexpr WORD kSelectTabBase = chrome::kTabCommandBase;
+    static constexpr WORD kSelectTabBase = frame::kTabCommandBase;
     static constexpr WORD kSearchGoogle = 120;
     static constexpr WORD kSearchBing = 121;
     static constexpr WORD kSearchDisabled = 122;
@@ -42,8 +42,8 @@ private:
     static constexpr UINT kPageReady = WM_APP + 7;
     static constexpr UINT kImageReady = WM_APP + 8;
     static constexpr UINT kStyleReady = WM_APP + 9;
-    static constexpr int kToolbarHeight = chrome::kToolbarHeight;
-    static constexpr int kStatusHeight = chrome::kStatusHeight;
+    static constexpr int kToolbarHeight = frame::kToolbarHeight;
+    static constexpr int kStatusHeight = frame::kStatusHeight;
 
     struct NavigationJob {
         idQueueNode<NavigationJob> queueNode;
