@@ -59,6 +59,10 @@ int main() {
              "document.getElementById('result').textContent="
              "String(a)+'/'+String(b)+'/'+String(c)+'/'+String(d)+'/'+String(calls);",
              "false/true/set/42/0");
+        Test("eval-scope",
+             "let answer=40;eval('answer += 2');"
+             "eval(\"document.getElementById('result').textContent=String(answer);\");",
+             "42");
         Test("google-style-bootstrap",
              "window.google=window.google||{};"
              "window.google.c=window.google.c||{cap:0};"
