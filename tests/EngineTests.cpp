@@ -1,7 +1,7 @@
 #include "html/HtmlParser.h"
 #include "html/TextEncoding.h"
 #include "script/ScriptRuntime.h"
-#include "script/EmbeddedEngine.h"
+#include "script/NativeEngine.h"
 #include <unordered_map>
 #include "style/Style.h"
 #include "util/Url.h"
@@ -397,7 +397,7 @@ void TestDomQuerySelectors() {
         "<html><body><section class='panel featured'><span class='label'>Old</span></section>"
         "<script>document.querySelector('.panel').innerHTML='<p id=\"dynamic\">Loaded</p>';"
         "document.querySelector('p').textContent='Updated';</script></body></html>");
-    const auto status = ac::script::ExecuteEmbedded(doc,L"https://example.org/",{});
+    const auto status = ac::script::ExecuteNative(doc,L"https://example.org/",{});
     Check(status.engineReady && status.unsupported == 0,
           "class and tag querySelector scripts execute");
     const auto* p = Find(*doc.root,"p");
@@ -413,7 +413,7 @@ void TestEmbeddedJavascript() {
         "document.getElementById('output').textContent = 'Total ' + sum;"
         "document.title = 'ECMAScript OK';"
         "</script></body></html>");
-    auto result = ac::script::ExecuteEmbedded(document, L"https://example.org/", {});
+    auto result = ac::script::ExecuteNative(document, L"https://example.org/", {});
     Check(result.scripts == 1 && result.unsupported == 0,
           "embedded ECMAScript executes arithmetic, loops and DOM bindings");
     Check(result.engineReady, "embedded engine must initialize before scripts execute");
@@ -428,13 +428,13 @@ void TestEmbeddedJavascript() {
         "const paths = ['/old','/new'];"
         "window.location.assign(paths[1]);"
         "</script></body></html>");
-    const auto navigation = ac::script::ExecuteEmbedded(
+    const auto navigation = ac::script::ExecuteNative(
         next, L"https://example.org/index", {});
     Check(navigation.navigation == L"https://example.org/new",
           "computed JavaScript location navigation resolves");
     auto malicious = ac::html::Parse(
         "<script>location.href = 'javascript:alert(1)'</script>");
-    const auto blocked = ac::script::ExecuteEmbedded(
+    const auto blocked = ac::script::ExecuteNative(
         malicious, L"https://example.org/", {});
     Check(blocked.navigation.empty(),
           "embedded ECMAScript rejects non-web navigation schemes");
