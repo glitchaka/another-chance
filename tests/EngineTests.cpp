@@ -152,6 +152,26 @@ void TestStyles() {
     Check(grid.layoutMode == ac::style::LayoutMode::Grid &&
           grid.gridColumns == 3, "grid track count parsed");
 
+    // CSS custom properties inherited from :root and overridden locally.
+    auto variableDocument = ac::html::Parse(
+        "<html><body><div class='panel'><p class='text'>value</p></div></body></html>");
+    ac::style::Sheet variables;
+    variables.Parse(":root { --brand: #123456; } "
+                    ".panel { color: var(--brand); --brand: #334455; } "
+                    ".text { color: var(--brand, red); }");
+    const auto* variableRoot = Find(*variableDocument.root,"html");
+    const auto* variablePanel = Find(*variableDocument.root,"div");
+    const auto* variableText = Find(*variableDocument.root,"p");
+    Check(variableRoot && variablePanel && variableText, "CSS variable fixture");
+    const auto rootComputed = variables.Compute(*variableRoot,parent);
+    const auto panelComputed = variables.Compute(*variablePanel,rootComputed);
+    const auto textComputed = variables.Compute(*variableText,panelComputed);
+    Check(rootComputed.variables.contains("--brand"),
+          ":root custom properties are stored");
+    Check(panelComputed.color == RGB(0x33,0x44,0x55) &&
+          textComputed.color == RGB(0x33,0x44,0x55),
+          "CSS variables cascade and inherit across nested nodes");
+
     // CSS important beats normal inline declarations; inline important wins.
     ac::style::Sheet importantSheet;
     importantSheet.Parse(".priority { color: #112233 !important; } "
