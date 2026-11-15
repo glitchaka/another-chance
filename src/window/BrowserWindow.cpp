@@ -37,6 +37,9 @@ void SetControlFont(HWND handle) {
 // Follow immediate HTML refresh redirects before attempting to render the page.
 // This is navigation handling, not a substitute for a JavaScript engine.
 std::wstring ImmediateMetaRefresh(const ac::html::Node& node, std::wstring_view base) {
+    // Inside noscript the refresh is a fallback for disabled scripting.
+    // Never follow that fallback when the embedded ECMAScript engine is enabled.
+    if (node.tag == "noscript" || node.tag == "template") return {};
     if (node.tag == "meta") {
         auto equiv = node.Attribute("http-equiv");
         std::transform(equiv.begin(), equiv.end(), equiv.begin(),
