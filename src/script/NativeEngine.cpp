@@ -815,7 +815,7 @@ class Interpreter {
             }
             else if(op=="&&") left.value=a.Truth()?b:a;
             else if(op=="||") left.value=a.Truth()?a:b;
-            else if(op=="??") left.value=a.kind==Value::Kind::Undefined?b:a;
+            else if(op=="??") left.value=(a.kind==Value::Kind::Undefined || a.kind==Value::Kind::Null)?b:a;
             left.path.clear();
         }
         if(min<=2 && Match("?")) {
