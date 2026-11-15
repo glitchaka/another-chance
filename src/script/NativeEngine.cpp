@@ -21,7 +21,7 @@ using js::Token;
 using js::TokenKind;
 
 struct Value {
-    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object };
+    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
@@ -197,6 +197,7 @@ class Interpreter {
         }
         if(base.kind==Value::Kind::Window) {
             if(name=="document") return Value::Special(Value::Kind::Document);
+            if(name=="Math") return Value::Special(Value::Kind::Math);
             if(name=="location") return Value::Special(Value::Kind::Location);
         }
         if(base.kind==Value::Kind::Location && name=="href")
@@ -299,6 +300,17 @@ class Interpreter {
             return {Value::ArrayValue(std::move(elements)),{}};
         }
         if(Match("!")) return {Value::Bool(!Primary().value.Truth()),{}};
+        if(Match("typeof")) {
+            const auto value=Primary().value;
+            switch(value.kind) {
+                case Value::Kind::Undefined: return {Value::Str("undefined"),{}};
+                case Value::Kind::Number: return {Value::Str("number"),{}};
+                case Value::Kind::Text: return {Value::Str("string"),{}};
+                case Value::Kind::Boolean: return {Value::Str("boolean"),{}};
+                case Value::Kind::Function: return {Value::Str("function"),{}};
+                default: return {Value::Str("object"),{}};
+            }
+        }
         if(Match("-")) return {Value::Num(-Primary().value.Number()),{}};
         if(Match("+")) return {Value::Num(Primary().value.Number()),{}};
         if(Match("++")) {
@@ -316,6 +328,14 @@ class Interpreter {
             if(name=="window") return {Value::Special(Value::Kind::Window),"window"};
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
+            if(name=="Infinity") return {Value::Num(INFINITY),{}};
+            if(name=="Math") return {Value::Special(Value::Kind::Math),{}};
+            if(name=="String" || name=="Number" || name=="Boolean" ||
+               name=="parseInt" || name=="parseFloat" || name=="isNaN") {
+                auto builtin=Value::Special(Value::Kind::Function);
+                builtin.text="@builtin:"+name;
+                return {builtin,{}};
+            }
             auto it=vars_.find(name);
             if(it!=vars_.end()) return {it->second,"$"+name};
             if(functions_.contains(name)) {
@@ -328,6 +348,25 @@ class Interpreter {
         throw std::runtime_error("Unsupported JavaScript primary expression");
     }
     Value CallFunction(const Value& value,const std::vector<Value>& args) {
+        const auto first = args.empty()?Value{}:args.front();
+        if(value.text=="@builtin:String") return Value::Str(first.String());
+        if(value.text=="@builtin:Number") return Value::Num(args.empty()?0:first.Number());
+        if(value.text=="@builtin:Boolean") return Value::Bool(first.Truth());
+        if(value.text=="@builtin:parseInt") {
+            const auto input=first.String();
+            const int radix=args.size()>1?static_cast<int>(args[1].Number()):10;
+            if(radix<2 || radix>36) return Value::Num(std::nan(""));
+            char* end=nullptr;
+            const long long value=std::strtoll(input.c_str(),&end,radix);
+            return Value::Num(end==input.c_str()?std::nan(""):static_cast<double>(value));
+        }
+        if(value.text=="@builtin:parseFloat") {
+            const auto input=first.String();
+            char* end=nullptr;
+            const double number=std::strtod(input.c_str(),&end);
+            return Value::Num(end==input.c_str()?std::nan(""):number);
+        }
+        if(value.text=="@builtin:isNaN") return Value::Bool(std::isnan(first.Number()));
         const auto found=functions_.find(value.text);
         if(found==functions_.end()) throw std::runtime_error("Unknown JavaScript function");
         if(callDepth_>=32) throw std::runtime_error("JavaScript recursion depth exceeded");
@@ -414,7 +453,28 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Document &&
+                    if(result.value.kind==Value::Kind::Math &&
+                       (member=="abs" || member=="floor" || member=="ceil" ||
+                        member=="round" || member=="min" || member=="max" ||
+                        member=="pow" || member=="sqrt" || member=="trunc")) {
+                        double value=args.empty()?std::nan(""):args.front().Number();
+                        if(member=="abs") value=std::fabs(value);
+                        else if(member=="floor") value=std::floor(value);
+                        else if(member=="ceil") value=std::ceil(value);
+                        else if(member=="trunc") value=std::trunc(value);
+                        else if(member=="round") value=std::floor(value+0.5);
+                        else if(member=="sqrt") value=std::sqrt(value);
+                        else if(member=="pow") value=args.size()>1?std::pow(value,args[1].Number()):std::nan("");
+                        else if(member=="min" || member=="max") {
+                            if(args.empty()) value=member=="min"?INFINITY:-INFINITY;
+                            for(const auto& argument:args) {
+                                const auto next=argument.Number();
+                                value=std::isnan(next)?next:
+                                    member=="min"?std::min(value,next):std::max(value,next);
+                            }
+                        }
+                        result={Value::Num(value),{}};
+                    } else if(result.value.kind==Value::Kind::Document &&
                       member=="createElement") {
                         const auto name=args.empty()?std::string{}:args[0].String();
                         if(name.empty() || name.size()>128)
