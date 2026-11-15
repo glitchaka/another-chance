@@ -888,9 +888,14 @@ public:
             pos_=0;
             while(Peek().kind!=TokenKind::End && stats_.navigation.empty()) Statement();
             return true;
-        } catch(const std::exception&) {
+        } catch(const std::exception& error) {
+            stats_.lastError=error.what();
+            return false;
+        } catch(const ThrowSignal& error) {
+            stats_.lastError="Uncaught JavaScript exception: "+error.value.String();
             return false;
         } catch(...) {
+            stats_.lastError="Unsupported JavaScript execution failure";
             return false;
         }
     }
