@@ -61,6 +61,7 @@ private:
         net::Response response;
         html::Document document;
         std::wstring scriptRedirect;
+        bool scriptingReady = false;
     };
 
     struct LoadedImage {
