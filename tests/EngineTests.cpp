@@ -419,6 +419,23 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeObjects() {
+    auto document = ac::html::Parse(
+        "<html><body><p id='result'>Before</p><script>"
+        "const config = { label: 'Score', points: 7 };"
+        "config.points = config.points * 6;"
+        "config['label'] = 'Answer';"
+        "document.getElementById('result').textContent = "
+        "config.label + ': ' + config.points;"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "native object literals, property access and indexed mutation");
+    const auto* p=Find(*document.root,"p");
+    Check(p && !p->children.empty() && p->children.front()->text=="Answer: 42",
+          "computed native object fields update the DOM");
+}
+
 void TestNativeFunctions() {
     auto document = ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -617,6 +634,7 @@ int main() {
         TestNativeDomInsertion();
         TestNativeControlFlow();
         TestNativeFunctions();
+        TestNativeObjects();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
