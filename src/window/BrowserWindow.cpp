@@ -357,6 +357,7 @@ void BrowserWindow::WorkerLoop() {
                 }
                 const auto scriptResult = script::ExecuteNative(result->document,response.url,scriptBodies);
                 result->scriptingReady = scriptResult.engineReady;
+                result->scriptError = scriptResult.lastError;
                 if (scriptResult.navigation != response.url)
                     result->scriptRedirect = scriptResult.navigation;
             }
@@ -726,9 +727,12 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     SetWindowTextW(hwnd_, (title.empty() ? L"Another Chance" :
         title + L" — Another Chance").c_str());
     if (result->response.Ok()) {
-        if (!layout_.HasVisibleContent()) {
+        if (!result->scriptError.empty()) {
             SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
-                      L" | Sin contenido representable (JS/CSS no admitido)");
+                      L" | JavaScript: " + url::ToWide(result->scriptError));
+        } else if (!layout_.HasVisibleContent()) {
+            SetStatus(L"HTTP " + std::to_wstring(result->response.status) +
+                      L" | No hay contenido visible");
         } else {
             SetStatus(L"HTTP " + std::to_wstring(result->response.status));
         }
