@@ -633,6 +633,33 @@ class Interpreter {
         if(s=="*" || s=="/" || s=="%") return 7;
         return -1;
     }
+    void SkipOperand(int precedence) {
+        unsigned parens=0,brackets=0,braces=0;
+        while(Peek().kind!=TokenKind::End) {
+            const auto& token=Peek().text;
+            if(!parens && !brackets && !braces) {
+                if(token==";" || token=="," || token==")" ||
+                   token=="]" || token=="}" || token==":" || token=="?")
+                    return;
+                const int rank=Priority(token);
+                if(rank>=0 && rank<precedence) return;
+            }
+            if(token=="(") ++parens;
+            else if(token=="[") ++brackets;
+            else if(token=="{") ++braces;
+            else if(token==")") {
+                if(!parens) return;
+                --parens;
+            } else if(token=="]") {
+                if(!brackets) return;
+                --brackets;
+            } else if(token=="}") {
+                if(!braces) return;
+                --braces;
+            }
+            ++pos_;
+        }
+    }
     // Skips unevaluated branches of the conditional operator without running
     // their side effects. Nested delimiters and nested ternaries are handled.
     void SkipConditionalBranch(bool untilColon) {
@@ -673,8 +700,18 @@ class Interpreter {
             if(rank<min) break;
             ++pos_;
             const bool assignment=rank==1;
+            const auto a=left.value;
+            const bool skip=(op=="&&" && !a.Truth()) ||
+                            (op=="||" && a.Truth()) ||
+                            (op=="??" && a.kind!=Value::Kind::Undefined &&
+                                          a.kind!=Value::Kind::Null);
+            if(skip) {
+                SkipOperand(rank+1);
+                left={a,{}};
+                continue;
+            }
             auto right=Expression(rank+(assignment?0:1));
-            auto a=left.value,b=right.value;
+            auto b=right.value;
             if(assignment) {
                 Value value=b;
                 if(op=="+=") value=(a.kind==Value::Kind::Text||b.kind==Value::Kind::Text)
