@@ -62,6 +62,7 @@ private:
         html::Document document;
         std::wstring scriptRedirect;
         bool scriptingReady = false;
+        std::string scriptError;
     };
 
     struct LoadedImage {
