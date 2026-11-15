@@ -114,6 +114,8 @@ class Interpreter {
     unsigned loopDepth_=0;
     unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
+    std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
+        std::make_shared<std::unordered_map<std::string,Value>>();
     std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
     size_t pos_=0;
@@ -150,6 +152,10 @@ class Interpreter {
             if(name=="Math") return Value::Special(Value::Kind::Math);
             if(name=="JSON") return Value::Special(Value::Kind::Json);
             if(name=="location") return Value::Special(Value::Kind::Location);
+            if(name=="window" || name=="self" || name=="globalThis")
+                return Value::Special(Value::Kind::Window);
+            auto global=globalProperties_->find(name);
+            if(global!=globalProperties_->end()) return global->second;
         }
         if(base.kind==Value::Kind::Location && name=="href")
             return Value::Str(ac::url::ToUtf8(base_));
@@ -194,7 +200,13 @@ class Interpreter {
             return;
         }
         const auto& path=target.path;
-        if(path.starts_with("$")) {vars_[path.substr(1)]=value;return;}
+        if(path.starts_with("$")) {
+            auto name=path.substr(1);
+            if(!vars_.contains(name) && globalProperties_->contains(name))
+                (*globalProperties_)[name]=value;
+            else vars_[name]=value;
+            return;
+        }
         const auto split=path.rfind('|');
         if(split==std::string::npos) throw std::runtime_error("Invalid JavaScript assignment");
         const auto member=path.substr(split+1);
@@ -268,6 +280,40 @@ class Interpreter {
     }
     Result Primary() {
         Tick();
+        if(Match("function")) {
+            std::string declaredName;
+            if(Peek().kind==TokenKind::Identifier)
+                declaredName=tokens_[pos_++].text;
+            Expect("(");
+            Function fn;
+            if(!Match(")")) {
+                do {
+                    if(Peek().kind!=TokenKind::Identifier)
+                        throw std::runtime_error("Function parameter name expected");
+                    fn.parameters.push_back(tokens_[pos_++].text);
+                } while(Match(","));
+                Expect(")");
+            }
+            if(Peek().text!="{") throw std::runtime_error("Function body expected");
+            const size_t begin=pos_;
+            int depth=0;
+            do {
+                if(Peek().kind==TokenKind::End)
+                    throw std::runtime_error("Unterminated function expression");
+                if(Peek().text=="{") ++depth;
+                else if(Peek().text=="}") --depth;
+                ++pos_;
+            } while(depth>0);
+            fn.body.assign(tokens_.begin()+static_cast<std::ptrdiff_t>(begin),
+                           tokens_.begin()+static_cast<std::ptrdiff_t>(pos_));
+            fn.body.push_back(Token{TokenKind::End,"",0,0});
+            const std::string internal="@function:"+std::to_string(++lambdaCounter_);
+            functions_.insert_or_assign(internal,std::move(fn));
+            auto value=Value::Special(Value::Kind::Function);
+            value.text=internal;
+            if(!declaredName.empty()) vars_[declaredName]=value;
+            return {value,{}};
+        }
         if(Peek().kind==TokenKind::Identifier && pos_+1<tokens_.size() &&
            tokens_[pos_+1].text=="=>") {
             std::vector<std::string> parameters{tokens_[pos_++].text};
@@ -346,7 +392,8 @@ class Interpreter {
             if(name=="null") return {Value::Special(Value::Kind::Null),{}};
             if(name=="undefined") return {};
             if(name=="document") return {Value::Special(Value::Kind::Document),"document"};
-            if(name=="window") return {Value::Special(Value::Kind::Window),"window"};
+            if(name=="window" || name=="self" || name=="globalThis")
+                return {Value::Special(Value::Kind::Window),"window"};
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
             if(name=="Infinity") return {Value::Num(INFINITY),{}};
@@ -360,6 +407,9 @@ class Interpreter {
             }
             auto it=vars_.find(name);
             if(it!=vars_.end()) return {it->second,"$"+name};
+            auto global=globalProperties_->find(name);
+            if(global!=globalProperties_->end())
+                return {global->second,"$"+name};
             if(functions_.contains(name)) {
                 auto callable=Value::Special(Value::Kind::Function);
                 callable.text=name;
@@ -660,6 +710,11 @@ class Interpreter {
                     } else if(old.value.kind==Value::Kind::Location) result.path="location|"+member;
                     else if(old.value.kind==Value::Kind::Window && member=="location")
                         result.path="location|location";
+                    else if(old.value.kind==Value::Kind::Window) {
+                        result.path="object|"+member;
+                        result.propertyObject=globalProperties_;
+                        result.propertyNode=nullptr;
+                    }
                     else if(old.value.kind==Value::Kind::Element) {
                         result.path=old.path+"|"+member;
                         result.propertyNode=old.value.element;
