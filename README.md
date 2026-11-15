@@ -4,7 +4,7 @@ Navegador web **nativo para Windows, escrito en C++20**, desarrollado sin Chromi
 
 El proyecto reutiliza y adapta estructuras del código fuente de **DOOM 3 BFG Edition** (id Software), disponible en [DOOM-3-BFG-GES](https://github.com/glitchaka/DOOM-3-BFG-GES), pero implementa desde cero la obtención HTTPS, análisis HTML, estilos, layout y presentación gráfica.
 
-> **Alcance**: es una primera implementación experimental de un motor web, no una alternativa completa a Chrome o Firefox. Sin motor JavaScript, DOM dinámico, CSS avanzado ni multimedia. Consulta los límites antes de usarlo para navegación cotidiana.
+> **Alcance**: motor web experimental, todavía no compatible con la web moderna. Tiene un intérprete JavaScript propio en desarrollo y un subconjunto de DOM/CSS; no implementa ECMAScript completo, eventos ni APIs web exigidas por sitios complejos.
 
 ## Compilación (Windows)
 
@@ -25,20 +25,21 @@ Ejecutable: `build/Release/AnotherChance.exe`.
 - `src/style/`: parser y aplicación de un subconjunto CSS.
 - `src/layout/`: composición de texto, imágenes y regiones clicables.
 - `src/image/`: decodificación PNG/JPEG/GIF mediante WIC nativo de Windows.
-- `src/window/`: ventana Win32, pestañas funcionales (recargan al cambiar), historial independiente, barra de navegación y chrome vectorial original dibujado con GDI+.
+- `src/script/`: lexer e intérprete JavaScript propios; operaciones limitadas de DOM nativo.
+- `src/window/`: interfaz Win32, pestañas, historial, barra de navegación y marco vectorial propio dibujado con GDI+.
 - `src/util/`: Unicode y resolución de URL.
 
 ## Estado funcional inicial
 
-Direcciones HTTP/HTTPS, introducción de direcciones en la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. No interpreta JavaScript, no admite formularios interactivos y no promete renderizar correctamente todos los sitios modernos.
+Direcciones HTTP/HTTPS, introducción de direcciones en la barra, navegación por enlaces, atrás/adelante/recargar, descarga asíncrona, HTML básico, CSS en línea, interno y externo (subconjunto), imágenes PNG/JPEG/GIF y renderizado propio de texto y separadores. Interpreta un subconjunto de JavaScript con variables, expresiones, bucles y operaciones DOM; todavía no admite ECMAScript completo, eventos, APIs web modernas ni renderizado correcto de todos los sitios.
 
-La compilación x64 y los tests de HTML, CSS y URL se verifican con GitHub Actions. Además, `BrowserEndToEnd` inicia la aplicación Windows real, visita un servidor HTTP local, comprueba la carga de HTML, CSS e imágenes, sigue un enlace y utiliza el historial. No implica compatibilidad con toda la web moderna.
+La compilación x64 y las pruebas se ejecutan mediante GitHub Actions; un commit sin resultado exitoso de CI no debe considerarse compilado ni validado. Además, `BrowserEndToEnd` inicia la aplicación Windows real, visita un servidor HTTP local, comprueba la carga de HTML, CSS e imágenes, sigue un enlace y utiliza el historial. No implica compatibilidad con toda la web moderna.
 
 El ejecutable Release utiliza la biblioteca de ejecución de MSVC enlazada estáticamente; no requiere instalar por separado Visual C++ Redistributable.
 
 ## Licencias
 
-Código derivado de DOOM 3 BFG: GPLv3 con los términos adicionales y exclusiones detallados en `COPYING.txt`; se mantiene la atribución a id Software. El código nuevo del repositorio se distribuye bajo GPLv3. Los componentes de Windows se enlazan mediante sus API públicas y no se copian sus implementaciones.
+Código derivado de DOOM 3 BFG: GPLv3 con los términos adicionales y exclusiones detallados en `COPYING.txt`; se mantiene la atribución a id Software. El código nuevo del repositorio se distribuye bajo GPLv3. El motor JavaScript del navegador se implementa dentro del propio proyecto; no se descarga QuickJS-ng ni otro intérprete. Los componentes de Windows se enlazan mediante sus API públicas y no se copian sus implementaciones.
 
 ## Interfaz
 
