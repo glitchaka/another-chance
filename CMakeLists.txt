@@ -56,7 +56,7 @@ if(BUILD_TESTING)
         src/html/TextEncoding.cpp
         src/script/ScriptRuntime.cpp
         src/script/JsLexer.cpp
-    src/script/NativeEngine.cpp
+        src/script/NativeEngine.cpp
         src/style/Style.cpp
         src/util/Url.cpp
         src/layout/Layout.cpp
