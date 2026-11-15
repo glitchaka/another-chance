@@ -21,7 +21,7 @@ using js::Token;
 using js::TokenKind;
 
 struct Value {
-    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object };
+    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
@@ -57,6 +57,7 @@ struct Value {
             }
             return result;
         }
+        if(kind==Kind::Null) return "null";
         if(kind==Kind::Undefined) return "undefined";
         return "[object Object]";
     }
@@ -71,7 +72,7 @@ struct Value {
         return std::nan("");
     }
     bool Truth() const {
-        if(kind==Kind::Undefined) return false;
+        if(kind==Kind::Undefined || kind==Kind::Null) return false;
         if(kind==Kind::Text) return !text.empty();
         if(kind==Kind::Boolean || kind==Kind::Number) return number!=0 && !std::isnan(number);
         return true;
@@ -304,7 +305,8 @@ class Interpreter {
             auto name=tokens_[pos_++].text;
             if(name=="true") return {Value::Bool(true),{}};
             if(name=="false") return {Value::Bool(false),{}};
-            if(name=="null" || name=="undefined") return {};
+            if(name=="null") return {Value::Special(Value::Kind::Null),{}};
+            if(name=="undefined") return {};
             if(name=="document") return {Value::Special(Value::Kind::Document),"document"};
             if(name=="window") return {Value::Special(Value::Kind::Window),"window"};
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
@@ -587,14 +589,16 @@ class Interpreter {
                     (a.kind==Value::Kind::Text ? a.text==b.text :
                      a.kind==Value::Kind::Number || a.kind==Value::Kind::Boolean
                         ? a.number==b.number :
-                     a.kind==Value::Kind::Undefined ? true :
+                     a.kind==Value::Kind::Undefined || a.kind==Value::Kind::Null ? true :
                      a.kind==Value::Kind::Element ? a.element==b.element : false);
                 left.value=Value::Bool(op=="==="?equal:!equal);
             }
             else if(op=="==" || op=="!=") {
-                const bool equal = a.kind==b.kind ? a.String()==b.String() :
-                    (a.kind==Value::Kind::Undefined || b.kind==Value::Kind::Undefined
-                        ? false : a.Number()==b.Number());
+                const bool nullishA = a.kind==Value::Kind::Undefined || a.kind==Value::Kind::Null;
+                const bool nullishB = b.kind==Value::Kind::Undefined || b.kind==Value::Kind::Null;
+                const bool equal = nullishA || nullishB ? nullishA && nullishB :
+                    a.kind==b.kind ? a.String()==b.String() :
+                    a.Number()==b.Number();
                 left.value=Value::Bool(op=="=="?equal:!equal);
             }
             else if(op=="&&") left.value=a.Truth()?b:a;
@@ -739,6 +743,8 @@ public:
             while(Peek().kind!=TokenKind::End && stats_.navigation.empty()) Statement();
             return true;
         } catch(const std::exception&) {
+            return false;
+        } catch(...) {
             return false;
         }
     }
