@@ -293,6 +293,13 @@ void TestLayoutGeometry() {
     layout.Reflow(dc, noScript, sheet, images, url, 400);
     Check(layout.HasVisibleContent(),
           "noscript content must appear when JS is not supported");
+    const auto* noscriptNode = Find(*noScript.root,"noscript");
+    Check(noscriptNode && !sheet.Compute(*noscriptNode,ac::style::Computed{}).hidden,
+          "noscript fallback visible with scripting disabled");
+    sheet.SetScriptingEnabled(true);
+    Check(sheet.Compute(*noscriptNode,ac::style::Computed{}).hidden,
+          "noscript fallback hidden with scripting enabled");
+    sheet.SetScriptingEnabled(false);
     auto centeredBox = ac::html::Parse(
         "<main style='max-width:160px;margin:0 auto;padding:10px'>"
         "<a href='/box'>centrado</a></main>");
@@ -396,6 +403,7 @@ void TestEmbeddedJavascript() {
     auto result = ac::script::ExecuteEmbedded(document, L"https://example.org/", {});
     Check(result.scripts == 1 && result.unsupported == 0,
           "embedded ECMAScript executes arithmetic, loops and DOM bindings");
+    Check(result.engineReady, "embedded engine must initialize before scripts execute");
     Check(document.title == "ECMAScript OK",
           "embedded ECMAScript modifies document title");
     const auto* output = Find(*document.root, "div");
