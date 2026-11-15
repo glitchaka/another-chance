@@ -400,7 +400,8 @@ class Interpreter {
             if(name=="Math") return {Value::Special(Value::Kind::Math),{}};
             if(name=="JSON") return {Value::Special(Value::Kind::Json),{}};
             if(name=="String" || name=="Number" || name=="Boolean" ||
-               name=="parseInt" || name=="parseFloat" || name=="isNaN") {
+               name=="parseInt" || name=="parseFloat" || name=="isNaN" ||
+               name=="eval") {
                 auto builtin=Value::Special(Value::Kind::Function);
                 builtin.text="@builtin:"+name;
                 return {builtin,{}};
@@ -439,6 +440,36 @@ class Interpreter {
             return Value::Num(end==input.c_str()?std::nan(""):number);
         }
         if(value.text=="@builtin:isNaN") return Value::Bool(std::isnan(first.Number()));
+        if(value.text=="@builtin:eval") {
+            if(first.kind!=Value::Kind::Text) return first;
+            if(callDepth_>=32) throw std::runtime_error("JavaScript eval recursion limit");
+            ++callDepth_;
+            auto originalTokens=std::move(tokens_);
+            const size_t originalPosition=pos_;
+            Value completed;
+            try {
+                tokens_=js::Tokenize(first.text);
+                pos_=0;
+                while(Peek().kind!=TokenKind::End && stats_.navigation.empty()) {
+                    if(Peek().text==";") {++pos_;continue;}
+                    // For expression-only input return its completion value.
+                    if(tokens_.size()>1 && tokens_.back().kind==TokenKind::End &&
+                       tokens_.size()<5 && Peek().kind!=TokenKind::Identifier) {
+                        completed=Expression().value;
+                        (void)Match(";");
+                    } else Statement();
+                }
+            } catch(...) {
+                tokens_=std::move(originalTokens);
+                pos_=originalPosition;
+                --callDepth_;
+                throw;
+            }
+            tokens_=std::move(originalTokens);
+            pos_=originalPosition;
+            --callDepth_;
+            return completed;
+        }
         const auto found=functions_.find(value.text);
         if(found==functions_.end()) throw std::runtime_error("Unknown JavaScript function");
         if(callDepth_>=32) throw std::runtime_error("JavaScript recursion depth exceeded");
