@@ -506,6 +506,7 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
         else if (htmlAlign == "right") result.textAlign = TextAlign::Right;
         else if (htmlAlign == "left") result.textAlign = TextAlign::Left;
     }
+    if (tag == "noscript" && scriptingEnabled_) result.hidden = true;
     if (tag == "head" || tag == "title" || tag == "script" ||
         tag == "style" || tag == "meta" || tag == "link" ||
         tag == "svg" || tag == "canvas" ||
