@@ -1,6 +1,7 @@
 #include "script/NativeEngine.h"
 #include "script/JsLexer.h"
 #include "script/JsValue.h"
+#include "script/JsJson.h"
 #include "util/Url.h"
 #include <algorithm>
 #include <cctype>
@@ -143,6 +144,7 @@ class Interpreter {
         if(base.kind==Value::Kind::Window) {
             if(name=="document") return Value::Special(Value::Kind::Document);
             if(name=="Math") return Value::Special(Value::Kind::Math);
+            if(name=="JSON") return Value::Special(Value::Kind::Json);
             if(name=="location") return Value::Special(Value::Kind::Location);
         }
         if(base.kind==Value::Kind::Location && name=="href")
@@ -345,6 +347,7 @@ class Interpreter {
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
             if(name=="Infinity") return {Value::Num(INFINITY),{}};
             if(name=="Math") return {Value::Special(Value::Kind::Math),{}};
+            if(name=="JSON") return {Value::Special(Value::Kind::Json),{}};
             if(name=="String" || name=="Number" || name=="Boolean" ||
                name=="parseInt" || name=="parseFloat" || name=="isNaN") {
                 auto builtin=Value::Special(Value::Kind::Function);
@@ -472,7 +475,15 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Math &&
+                    if(result.value.kind==Value::Kind::Json &&
+                       member=="parse") {
+                        if(args.empty()) throw std::runtime_error("JSON.parse requires input");
+                        result={js::ParseJson(args[0].String()),{}};
+                    } else if(result.value.kind==Value::Kind::Json &&
+                              member=="stringify") {
+                        result={args.empty()?Value{}:
+                                    Value::Str(js::StringifyJson(args[0])),{}};
+                    } else if(result.value.kind==Value::Kind::Math &&
                        (member=="abs" || member=="floor" || member=="ceil" ||
                         member=="round" || member=="min" || member=="max" ||
                         member=="pow" || member=="sqrt" || member=="trunc")) {
