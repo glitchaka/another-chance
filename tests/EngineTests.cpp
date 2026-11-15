@@ -329,6 +329,23 @@ void TestScriptDom() {
     Check(external.title=="Script externo", "external script title updated");
     layout.Reflow(dc,external,sheet,images,L"https://example.org/",480);
     Check(layout.HasVisibleContent(),"external script produces visible content");
+    auto navigation = ac::html::Parse(
+        "<html><body><script>window.location.replace('/next');</script></body></html>");
+    const auto navResult = ac::script::Execute(navigation,L"https://example.org/start",{});
+    Check(navResult.operations == 1 &&
+          navResult.navigation == L"https://example.org/next",
+          "literal script navigation resolves relative URLs");
+    auto absoluteNavigation = ac::html::Parse(
+        "<script>location.href='https://example.net/result';</script>");
+    const auto absoluteResult = ac::script::Execute(
+        absoluteNavigation,L"https://example.org/",{});
+    Check(absoluteResult.navigation == L"https://example.net/result",
+          "literal location href changes navigation");
+    auto refused = ac::html::Parse(
+        "<script>location.href='javascript:alert(1)';</script>");
+    const auto refusedResult = ac::script::Execute(refused,L"https://example.org/",{});
+    Check(refusedResult.navigation.empty(),
+          "script location must not navigate to active URI schemes");
     DeleteDC(dc);
 }
 
