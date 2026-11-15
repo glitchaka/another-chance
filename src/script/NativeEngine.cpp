@@ -167,6 +167,9 @@ class Interpreter {
     struct Function { std::vector<std::string> parameters; std::vector<Token> body; };
     std::unordered_map<std::string,Function> functions_;
     struct ReturnSignal { Value value; };
+    struct BreakSignal {};
+    struct ContinueSignal {};
+    unsigned loopDepth_=0;
     unsigned callDepth_=0;
     std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
@@ -726,6 +729,16 @@ class Interpreter {
             functions_.insert_or_assign(name,std::move(function));
             return;
         }
+        if(Match("break")) {
+            if(!loopDepth_) throw std::runtime_error("break outside loop");
+            (void)Match(";");
+            throw BreakSignal{};
+        }
+        if(Match("continue")) {
+            if(!loopDepth_) throw std::runtime_error("continue outside loop");
+            (void)Match(";");
+            throw ContinueSignal{};
+        }
         if(Match("return")) {
             Value value;
             if(Peek().text!=";" && Peek().text!="}")
@@ -763,13 +776,19 @@ class Interpreter {
             const size_t body=pos_;
             SkipStatement();
             const size_t after=pos_;
-            for(unsigned loops=0;loops<20000;++loops) {
-                Tick();
-                pos_=condition;
-                if(!Expression().value.Truth()) break;
-                pos_=body;
-                Statement();
-            }
+            ++loopDepth_;
+            try {
+                for(unsigned loops=0;loops<20000;++loops) {
+                    Tick();
+                    pos_=condition;
+                    if(!Expression().value.Truth()) break;
+                    pos_=body;
+                    try {Statement();}
+                    catch(const ContinueSignal&) {continue;}
+                    catch(const BreakSignal&) {break;}
+                }
+            } catch(...) {--loopDepth_;throw;}
+            --loopDepth_;
             pos_=after;
             return;
         }
@@ -785,13 +804,21 @@ class Interpreter {
             const size_t body=pos_;
             SkipStatement();
             const size_t after=pos_;
-            for(unsigned n=0;n<20000;++n) {
-                Tick();
-                pos_=test;
-                if(!Match(";") && !Expression(2).value.Truth()) break;
-                pos_=body;Statement();
-                pos_=update;if(Peek().text!=")") (void)Expression();
-            }
+            ++loopDepth_;
+            try {
+                for(unsigned n=0;n<20000;++n) {
+                    Tick();
+                    pos_=test;
+                    if(!Match(";") && !Expression(2).value.Truth()) break;
+                    pos_=body;
+                    try {Statement();}
+                    catch(const ContinueSignal&) {}
+                    catch(const BreakSignal&) {break;}
+                    pos_=update;
+                    if(Peek().text!=")") (void)Expression();
+                }
+            } catch(...) {--loopDepth_;throw;}
+            --loopDepth_;
             pos_=after;
             return;
         }
