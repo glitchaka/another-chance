@@ -374,6 +374,8 @@ class Interpreter {
         if(found==functions_.end()) throw std::runtime_error("Unknown JavaScript function");
         if(callDepth_>=32) throw std::runtime_error("JavaScript recursion depth exceeded");
         ++callDepth_;
+        const unsigned outerLoopDepth=loopDepth_;
+        loopDepth_=0;
         const Function function=found->second;
         auto savedTokens=std::move(tokens_);
         const size_t savedPosition=pos_;
@@ -392,6 +394,7 @@ class Interpreter {
             tokens_=std::move(savedTokens);
             pos_=savedPosition;
             --callDepth_;
+            loopDepth_=outerLoopDepth;
             throw;
         }
         // Update preexisting outer bindings without leaking function-local names.
@@ -408,6 +411,7 @@ class Interpreter {
         tokens_=std::move(savedTokens);
         pos_=savedPosition;
         --callDepth_;
+        loopDepth_=outerLoopDepth;
         return returned;
     }
     Result Postfix() {
