@@ -419,6 +419,22 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeStandardBuiltins() {
+    auto document=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "const amount = parseInt('21px') * 2;"
+        "const total = Math.max(amount, Math.floor(41.9));"
+        "const ok = typeof total === 'number' && Boolean(total);"
+        "if (ok) document.getElementById('result').textContent = String(total);"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "native conversion functions and Math methods execute");
+    const auto* p=Find(*document.root,"p");
+    Check(p && !p->children.empty() && p->children.front()->text=="42",
+          "Math.max and parseInt calculate correct result");
+}
+
 void TestNativePrimitiveSemantics() {
     auto document=ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -675,6 +691,7 @@ int main() {
         TestNativeObjects();
         TestNativeCollections();
         TestNativePrimitiveSemantics();
+        TestNativeStandardBuiltins();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
