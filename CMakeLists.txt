@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.21)
 project(AnotherChance VERSION 0.1.0 LANGUAGES C CXX RC)
 
 # Independent, embeddable ECMAScript runtime. No Chromium/Gecko/WebView dependency.
+# Bundle MSVC CRT so the Release EXE runs without installing VC++ Redistributable.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 include(FetchContent)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static third-party libraries" FORCE)
 set(QJS_ENABLE_INSTALL OFF CACHE BOOL "Do not install embedded QuickJS" FORCE)
@@ -12,11 +17,6 @@ FetchContent_Declare(quickjs_ng
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(quickjs_ng)
-
-# Bundle MSVC CRT so the Release EXE runs without installing VC++ Redistributable.
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
 
 if(NOT WIN32)
     message(FATAL_ERROR "Another Chance 0.1 requiere Windows (Win32, WinHTTP y GDI).")
@@ -54,6 +54,7 @@ if(BUILD_TESTING)
         src/html/HtmlParser.cpp
         src/html/TextEncoding.cpp
         src/script/ScriptRuntime.cpp
+        src/script/EmbeddedEngine.cpp
         src/style/Style.cpp
         src/util/Url.cpp
         src/layout/Layout.cpp
