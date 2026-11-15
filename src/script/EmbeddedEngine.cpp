@@ -240,6 +240,7 @@ Execution ExecuteEmbedded(Document& document, std::wstring_view baseUrl,
     bool ready = !JS_IsException(setup);
     JS_FreeValue(context, setup);
     if (ready) {
+        state.execution.engineReady = true;
         std::vector<std::string> scripts;
         Collect(*document.root, baseUrl, external, scripts);
         for (const auto& code : scripts) {
