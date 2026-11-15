@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
 #include <iomanip>
 #include <memory>
 #include <sstream>
@@ -837,42 +838,64 @@ class Interpreter {
         if(Match("try")) {
             const size_t tryBody=pos_;
             SkipStatement();
-            Expect("catch");
             std::string binding;
-            if(Match("(")) {
-                if(Peek().kind!=TokenKind::Identifier)
-                    throw std::runtime_error("Catch identifier required");
-                binding=tokens_[pos_++].text;
-                Expect(")");
+            size_t catchBody=0;
+            bool hasCatch=false,hasFinally=false;
+            if(Match("catch")) {
+                hasCatch=true;
+                if(Match("(")) {
+                    if(Peek().kind!=TokenKind::Identifier)
+                        throw std::runtime_error("Catch identifier required");
+                    binding=tokens_[pos_++].text;
+                    Expect(")");
+                }
+                catchBody=pos_;
+                SkipStatement();
             }
-            const size_t catchBody=pos_;
-            SkipStatement();
-            const size_t afterCatch=pos_;
+            size_t finallyBody=0;
+            if(Match("finally")) {
+                hasFinally=true;
+                finallyBody=pos_;
+                SkipStatement();
+            }
+            if(!hasCatch && !hasFinally)
+                throw std::runtime_error("try must have catch or finally");
+            const size_t after=pos_;
+            std::exception_ptr pending;
             pos_=tryBody;
             try {
                 Statement();
             } catch(const ThrowSignal& error) {
-                const auto saved=vars_.find(binding);
-                const bool hadPrevious=!binding.empty() && saved!=vars_.end();
-                const Value previous=hadPrevious?saved->second:Value{};
-                if(!binding.empty()) vars_[binding]=error.value;
-                pos_=catchBody;
+                if(!hasCatch) pending=std::current_exception();
+                else {
+                    const auto previous=vars_.find(binding);
+                    const bool hadPrevious=!binding.empty() && previous!=vars_.end();
+                    const Value oldValue=hadPrevious?previous->second:Value{};
+                    if(!binding.empty()) vars_[binding]=error.value;
+                    pos_=catchBody;
+                    try {
+                        Statement();
+                    } catch(...) {
+                        pending=std::current_exception();
+                    }
+                    if(!binding.empty()) {
+                        if(hadPrevious) vars_[binding]=oldValue;
+                        else vars_.erase(binding);
+                    }
+                }
+            } catch(...) {
+                pending=std::current_exception();
+            }
+            if(hasFinally) {
+                pos_=finallyBody;
                 try {
                     Statement();
                 } catch(...) {
-                    if(!binding.empty()) {
-                        if(hadPrevious) vars_[binding]=previous;
-                        else vars_.erase(binding);
-                    }
-                    throw;
-                }
-                if(!binding.empty()) {
-                    if(hadPrevious) vars_[binding]=previous;
-                    else vars_.erase(binding);
+                    pending=std::current_exception();
                 }
             }
-            pos_=afterCatch;
-            if(Match("finally")) Statement();
+            pos_=after;
+            if(pending) std::rethrow_exception(pending);
             return;
         }
         if(Match("return")) {
