@@ -467,6 +467,33 @@ void TestNativeDiagnostics() {
           "uncaught exception message remains visible for diagnosis");
 }
 
+void TestNativeFinally() {
+    auto doc=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "function evaluate() { try { return 42; } "
+        "finally { document.title = 'finally executed'; } }"
+        "document.getElementById('result').textContent = String(evaluate());"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(doc,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported==0,
+          "try/finally executes around function return");
+    Check(doc.title=="finally executed",
+          "finally must run even when the try branch returns");
+    const auto* result=Find(*doc.root,"p");
+    Check(result && !result->children.empty() &&
+          result->children.front()->text=="42",
+          "function return value survives finally");
+    auto throwing=ac::html::Parse(
+        "<html><body><script>"
+        "try { throw 'expected'; } "
+        "catch(e) { document.title = e; } "
+        "finally { document.title += ' finally'; }"
+        "</script></body></html>");
+    const auto caught=ac::script::ExecuteNative(throwing,L"https://example.org/",{});
+    Check(caught.unsupported==0 && throwing.title=="expected finally",
+          "try/catch/finally executes finalizer after caught exception");
+}
+
 void TestNativeExceptions() {
     auto document=ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -776,6 +803,7 @@ int main() {
         TestNativeStandardBuiltins();
         TestNativeLoopControl();
         TestNativeExceptions();
+        TestNativeFinally();
         TestNativeDiagnostics();
         TestConditionalOperator();
         TestLogicalShortCircuit();
