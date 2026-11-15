@@ -419,6 +419,25 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestLogicalShortCircuit() {
+    auto doc=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "let calls=0; function side(){ calls++; return 999; }"
+        "const a=false && side();"
+        "const b=true || side();"
+        "const c='set' ?? side();"
+        "const d=null ?? 42;"
+        "if (!a && b && c==='set' && d===42 && calls===0) "
+        "document.getElementById('result').textContent='PASS';"
+        "</script></body></html>");
+    const auto state=ac::script::ExecuteNative(doc,L"https://example.org/",{});
+    Check(state.engineReady && state.unsupported==0,
+          "logical operators parse without evaluating skipped operands");
+    const auto* node=Find(*doc.root,"p");
+    Check(node && !node->children.empty() && node->children.front()->text=="PASS",
+          "logical and nullish operators short circuit side effects");
+}
+
 void TestConditionalOperator() {
     auto doc=ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -759,6 +778,7 @@ int main() {
         TestNativeExceptions();
         TestNativeDiagnostics();
         TestConditionalOperator();
+        TestLogicalShortCircuit();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
