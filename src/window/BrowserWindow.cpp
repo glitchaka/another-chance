@@ -670,7 +670,7 @@ int BrowserWindow::MaxScroll() const {
 void BrowserWindow::Resize(int width, int height) {
     clientWidth_ = std::max(1, width);
     clientHeight_ = std::max(1, height);
-    const auto geometry = chrome::Measure(clientWidth_);
+    const auto geometry = frame::Measure(clientWidth_);
     if (address_) {
         MoveWindow(address_, geometry.address.left + 11, geometry.address.top + 3,
                    std::max(70, static_cast<int>(geometry.address.right -
@@ -809,12 +809,12 @@ void BrowserWindow::DrawClient(HDC dc) {
     FillRect(dc, &client, background);
     DeleteObject(background);
     DrawContent(dc);
-    std::vector<chrome::Tab> tabLabels;
+    std::vector<frame::Tab> tabLabels;
     tabLabels.reserve(tabs_.size());
     for (size_t i = 0; i < tabs_.size(); ++i) {
         tabLabels.push_back({tabs_[i].title, i == activeTab_ && isLoading_});
     }
-    chrome::Draw(dc, clientWidth_, clientHeight_, tabLabels, activeTab_,
+    frame::Draw(dc, clientWidth_, clientHeight_, tabLabels, activeTab_,
                  !history_.empty() && historyIndex_ > 0,
                  !history_.empty() && historyIndex_ + 1 < history_.size(),
                  bookmarks_.contains(currentUrl_), isLoading_,
@@ -903,7 +903,7 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 if (top) return HTTOP;
                 if (bottom) return HTBOTTOM;
             }
-            if (chrome::IsDraggable(x, y, clientWidth_, tabs_.size())) return HTCAPTION;
+            if (frame::IsDraggable(x, y, clientWidth_, tabs_.size())) return HTCAPTION;
             return HTCLIENT;
         }
         case WM_NCLBUTTONDBLCLK:
@@ -1038,22 +1038,22 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             const int x = GET_X_LPARAM(lparam);
             const int y = GET_Y_LPARAM(lparam);
             if (y < kToolbarHeight) {
-                const auto hit = chrome::HitTest(x, y, clientWidth_, tabs_.size());
+                const auto hit = frame::HitTest(x, y, clientWidth_, tabs_.size());
                 switch (hit.action) {
-                    case chrome::Action::TabSelect: SwitchTab(hit.index); break;
-                    case chrome::Action::TabClose: CloseTab(hit.index); break;
-                    case chrome::Action::NewTab: OpenTab(); break;
-                    case chrome::Action::Back: GoBack(); break;
-                    case chrome::Action::Forward: GoForward(); break;
-                    case chrome::Action::Reload: Reload(); break;
-                    case chrome::Action::Home: ShowHome(); break;
-                    case chrome::Action::Bookmark: ToggleBookmark(); break;
-                    case chrome::Action::Menu: OpenMenu(); break;
-                    case chrome::Action::TabMenu: OpenTabMenu(); break;
-                    case chrome::Action::Minimize: ShowWindow(hwnd_, SW_MINIMIZE); break;
-                    case chrome::Action::Maximize: MaximizeRestore(); break;
-                    case chrome::Action::Close: PostMessageW(hwnd_, WM_CLOSE, 0, 0); break;
-                    case chrome::Action::None: break;
+                    case frame::Action::TabSelect: SwitchTab(hit.index); break;
+                    case frame::Action::TabClose: CloseTab(hit.index); break;
+                    case frame::Action::NewTab: OpenTab(); break;
+                    case frame::Action::Back: GoBack(); break;
+                    case frame::Action::Forward: GoForward(); break;
+                    case frame::Action::Reload: Reload(); break;
+                    case frame::Action::Home: ShowHome(); break;
+                    case frame::Action::Bookmark: ToggleBookmark(); break;
+                    case frame::Action::Menu: OpenMenu(); break;
+                    case frame::Action::TabMenu: OpenTabMenu(); break;
+                    case frame::Action::Minimize: ShowWindow(hwnd_, SW_MINIMIZE); break;
+                    case frame::Action::Maximize: MaximizeRestore(); break;
+                    case frame::Action::Close: PostMessageW(hwnd_, WM_CLOSE, 0, 0); break;
+                    case frame::Action::None: break;
                 }
                 return 0;
             }
@@ -1070,9 +1070,9 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 GetCursorPos(&point);
                 ScreenToClient(hwnd_, &point);
                 const RECT content = ContentRect();
-                if (point.y < kToolbarHeight && chrome::HitTest(
+                if (point.y < kToolbarHeight && frame::HitTest(
                         point.x, point.y, clientWidth_, tabs_.size()).action !=
-                        chrome::Action::None) {
+                        frame::Action::None) {
                     SetCursor(LoadCursorW(nullptr, IDC_HAND));
                     return TRUE;
                 }
