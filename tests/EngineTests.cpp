@@ -419,6 +419,25 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestConditionalOperator() {
+    auto doc=ac::html::Parse(
+        "<html><body><p id='result'></p><script>"
+        "let calls=0; function increment(){ calls++; return 'bad'; }"
+        "const text = 3 < 4 ? 'yes' : increment();"
+        "const other = 3 > 4 ? increment() : ' ok';"
+        "document.getElementById('result').textContent = text + other;"
+        "if (calls !== 0) document.title = 'wrong branch executed';"
+        "</script></body></html>");
+    const auto execution=ac::script::ExecuteNative(doc,L"https://example.org/",{});
+    Check(execution.engineReady && execution.unsupported==0,
+          "native JavaScript conditional expression syntax");
+    const auto* node=Find(*doc.root,"p");
+    Check(node && !node->children.empty() && node->children.front()->text=="yes ok",
+          "conditional JavaScript evaluates only selected branch");
+    Check(doc.title!="wrong branch executed",
+          "unselected conditional branches do not perform side effects");
+}
+
 void TestNativeDiagnostics() {
     auto document=ac::html::Parse(
         "<html><body><script>throw 'specific native error';</script></body></html>");
@@ -739,6 +758,7 @@ int main() {
         TestNativeLoopControl();
         TestNativeExceptions();
         TestNativeDiagnostics();
+        TestConditionalOperator();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
