@@ -59,6 +59,14 @@ int main() {
              "document.getElementById('result').textContent="
              "String(a)+'/'+String(b)+'/'+String(c)+'/'+String(d)+'/'+String(calls);",
              "false/true/set/42/0");
+        Test("google-style-bootstrap",
+             "window.google=window.google||{};"
+             "window.google.c=window.google.c||{cap:0};"
+             "(function(){var local=7;google.c.cap=local*6;})();"
+             "document.getElementById('result').textContent=String(google.c.cap);","42");
+        Test("function-expression",
+             "const twice=function(v){return v*2;};"
+             "document.getElementById('result').textContent=String(twice(21));","42");
         Test("conditional","const a=false?'bad':'ok';"
              "document.getElementById('result').textContent=a;","ok");
         auto tokens=ac::script::js::Tokenize("const text='Hola\\u00f1';");
