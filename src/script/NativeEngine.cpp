@@ -423,8 +423,21 @@ class Interpreter {
             else if(op==">") left.value=Value::Bool(a.Number()>b.Number());
             else if(op=="<=") left.value=Value::Bool(a.Number()<=b.Number());
             else if(op==">=") left.value=Value::Bool(a.Number()>=b.Number());
-            else if(op=="==" || op=="===") left.value=Value::Bool(a.String()==b.String());
-            else if(op=="!=" || op=="!==") left.value=Value::Bool(a.String()!=b.String());
+            else if(op=="===" || op=="!==") {
+                const bool equal = a.kind==b.kind &&
+                    (a.kind==Value::Kind::Text ? a.text==b.text :
+                     a.kind==Value::Kind::Number || a.kind==Value::Kind::Boolean
+                        ? a.number==b.number :
+                     a.kind==Value::Kind::Undefined ? true :
+                     a.kind==Value::Kind::Element ? a.element==b.element : false);
+                left.value=Value::Bool(op=="==="?equal:!equal);
+            }
+            else if(op=="==" || op=="!=") {
+                const bool equal = a.kind==b.kind ? a.String()==b.String() :
+                    (a.kind==Value::Kind::Undefined || b.kind==Value::Kind::Undefined
+                        ? false : a.Number()==b.Number());
+                left.value=Value::Bool(op=="=="?equal:!equal);
+            }
             else if(op=="&&") left.value=a.Truth()?b:a;
             else if(op=="||") left.value=a.Truth()?a:b;
             else if(op=="??") left.value=a.kind==Value::Kind::Undefined?b:a;
