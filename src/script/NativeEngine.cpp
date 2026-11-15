@@ -21,7 +21,7 @@ using js::Token;
 using js::TokenKind;
 
 struct Value {
-    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array };
+    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array, Function };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
@@ -141,6 +141,10 @@ class Interpreter {
     std::wstring base_;
     Execution& stats_;
     std::unordered_map<std::string,Value> vars_;
+    struct Function { std::vector<std::string> parameters; std::vector<Token> body; };
+    std::unordered_map<std::string,Function> functions_;
+    struct ReturnSignal { Value value; };
+    unsigned callDepth_=0;
     std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
     size_t pos_=0;
@@ -253,14 +257,70 @@ class Interpreter {
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
             auto it=vars_.find(name);
-            return {it==vars_.end()?Value{}:it->second,"$"+name};
+            if(it!=vars_.end()) return {it->second,"$"+name};
+            if(functions_.contains(name)) {
+                auto callable=Value::Special(Value::Kind::Function);
+                callable.text=name;
+                return {callable,{}};
+            }
+            return {Value{},"$"+name};
         }
         throw std::runtime_error("Unsupported JavaScript primary expression");
+    }
+    Value CallFunction(const Value& value,const std::vector<Value>& args) {
+        const auto found=functions_.find(value.text);
+        if(found==functions_.end()) throw std::runtime_error("Unknown JavaScript function");
+        if(callDepth_>=32) throw std::runtime_error("JavaScript recursion depth exceeded");
+        ++callDepth_;
+        const Function function=found->second;
+        auto savedTokens=std::move(tokens_);
+        const size_t savedPosition=pos_;
+        auto savedVariables=vars_;
+        for(size_t i=0;i<function.parameters.size();++i)
+            vars_[function.parameters[i]]=i<args.size()?args[i]:Value{};
+        tokens_=function.body;
+        pos_=0;
+        Value returned;
+        try {
+            Statement();
+        } catch(const ReturnSignal& signal) {
+            returned=signal.value;
+        } catch(...) {
+            vars_=std::move(savedVariables);
+            tokens_=std::move(savedTokens);
+            pos_=savedPosition;
+            --callDepth_;
+            throw;
+        }
+        // Update preexisting outer bindings without leaking function-local names.
+        for(auto& [name,old]:savedVariables) {
+            bool parameter=false;
+            for(const auto& argument:function.parameters)
+                if(argument==name) {parameter=true;break;}
+            if(!parameter) {
+                auto changed=vars_.find(name);
+                if(changed!=vars_.end()) old=changed->second;
+            }
+        }
+        vars_=std::move(savedVariables);
+        tokens_=std::move(savedTokens);
+        pos_=savedPosition;
+        --callDepth_;
+        return returned;
     }
     Result Postfix() {
         auto result=Primary();
         while(true) {
-            if(Match("[")) {
+            if(Match("(")) {
+                std::vector<Value> args;
+                if(!Match(")")) {
+                    do { args.push_back(Expression(2).value); } while(Match(","));
+                    Expect(")");
+                }
+                if(result.value.kind!=Value::Kind::Function)
+                    throw std::runtime_error("Attempt to call non-function");
+                result={CallFunction(result.value,args),{}};
+            } else if(Match("[")) {
                 const auto key=Expression().value;
                 Expect("]");
                 if(result.value.kind==Value::Kind::Array && result.value.array) {
@@ -467,6 +527,43 @@ class Interpreter {
                 Statement();
             }
             return;
+        }
+        if(Match("function")) {
+            if(Peek().kind!=TokenKind::Identifier)
+                throw std::runtime_error("Function name expected");
+            const std::string name=tokens_[pos_++].text;
+            Expect("(");
+            Function function;
+            if(!Match(")")) {
+                do {
+                    if(Peek().kind!=TokenKind::Identifier)
+                        throw std::runtime_error("Parameter name expected");
+                    function.parameters.push_back(tokens_[pos_++].text);
+                } while(Match(","));
+                Expect(")");
+            }
+            if(Peek().text!="{") throw std::runtime_error("Function body expected");
+            const size_t begin=pos_;
+            int nesting=0;
+            do {
+                if(Peek().kind==TokenKind::End)
+                    throw std::runtime_error("Unterminated function body");
+                if(Peek().text=="{") ++nesting;
+                else if(Peek().text=="}") --nesting;
+                ++pos_;
+            } while(nesting>0);
+            function.body.assign(tokens_.begin()+static_cast<std::ptrdiff_t>(begin),
+                                 tokens_.begin()+static_cast<std::ptrdiff_t>(pos_));
+            function.body.push_back(Token{TokenKind::End,"",0,0});
+            functions_.insert_or_assign(name,std::move(function));
+            return;
+        }
+        if(Match("return")) {
+            Value value;
+            if(Peek().text!=";" && Peek().text!="}")
+                value=Expression().value;
+            (void)Match(";");
+            throw ReturnSignal{value};
         }
         if(Match("let") || Match("const") || Match("var")) {
             do {
