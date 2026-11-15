@@ -42,6 +42,7 @@ class Sheet {
 public:
     using Declaration = std::pair<std::string, std::string>;
     void Parse(std::string_view css, int viewportWidth = 1024);
+    void SetScriptingEnabled(bool enabled) { scriptingEnabled_ = enabled; }
     [[nodiscard]] Computed Compute(const html::Node& node,
                                    const Computed& parent) const;
 private:
@@ -50,6 +51,7 @@ private:
         std::vector<Declaration> declarations;
     };
     std::vector<Rule> rules_;
+    bool scriptingEnabled_ = false;
     static void Apply(Computed& computed, std::string_view key,
                       std::string_view value);
     static bool Matches(const html::Node& node, std::string_view selector);
