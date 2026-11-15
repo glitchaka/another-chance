@@ -2,6 +2,7 @@
 #include "script/JsLexer.h"
 #include "util/Url.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -140,6 +141,7 @@ class Interpreter {
     std::wstring base_;
     Execution& stats_;
     std::unordered_map<std::string,Value> vars_;
+    std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
     size_t pos_=0;
     unsigned steps_=0;
@@ -287,6 +289,19 @@ class Interpreter {
                         Expect(")");
                     }
                     if(result.value.kind==Value::Kind::Document &&
+                      member=="createElement") {
+                        const auto name=args.empty()?std::string{}:args[0].String();
+                        if(name.empty() || name.size()>128)
+                            throw std::runtime_error("Invalid element tag");
+                        for(unsigned char c:name)
+                            if(!std::isalnum(c) && c!='-' && c!=':')
+                                throw std::runtime_error("Invalid element tag");
+                        auto created=std::make_unique<Node>();
+                        created->tag=name;
+                        auto* pointer=created.get();
+                        detached_.push_back(std::move(created));
+                        result={Value::NodeValue(pointer),{}};
+                    } else if(result.value.kind==Value::Kind::Document &&
                       (member=="getElementById" || member=="querySelector")) {
                         const auto argument=args.empty()?std::string{}:args[0].String();
                         const auto selector=member=="getElementById"?"#"+argument:argument;
@@ -297,6 +312,49 @@ class Interpreter {
                         if(!body) body=doc_.root.get();
                         for(auto& arg:args) SetNode(doc_,*body,arg.String(),true,true);
                         ++stats_.operations;result={};
+                    } else if(result.value.kind==Value::Kind::Element &&
+                              result.value.element && member=="setAttribute") {
+                        if(args.size()>=2) {
+                            result.value.element->attributes[args[0].String()]=args[1].String();
+                            ++stats_.operations;
+                        }
+                        result={};
+                    } else if(result.value.kind==Value::Kind::Element &&
+                              result.value.element && member=="getAttribute") {
+                        result={Value::Str(args.empty()?std::string{}:
+                            result.value.element->Attribute(args[0].String())),{}};
+                    } else if(result.value.kind==Value::Kind::Element &&
+                              result.value.element && member=="appendChild") {
+                        if(!args.empty() && args[0].kind==Value::Kind::Element &&
+                           args[0].element) {
+                            Node* child=args[0].element;
+                            if(child==result.value.element)
+                                throw std::runtime_error("DOM cycle");
+                            for(Node* parent=result.value.element;parent;parent=parent->parent)
+                                if(parent==child) throw std::runtime_error("DOM cycle");
+                            std::unique_ptr<Node> owner;
+                            for(auto it=detached_.begin();it!=detached_.end();++it)
+                                if(it->get()==child) {
+                                    owner=std::move(*it);
+                                    detached_.erase(it);
+                                    break;
+                                }
+                            if(!owner && child->parent) {
+                                auto& children=child->parent->children;
+                                for(auto it=children.begin();it!=children.end();++it)
+                                    if(it->get()==child) {
+                                        owner=std::move(*it);
+                                        children.erase(it);
+                                        break;
+                                    }
+                            }
+                            if(owner) {
+                                owner->parent=result.value.element;
+                                result.value.element->children.push_back(std::move(owner));
+                                ++stats_.operations;
+                            }
+                        }
+                        result={};
                     } else if(result.value.kind==Value::Kind::Location &&
                               (member=="assign" || member=="replace")) {
                         if(!args.empty()) Navigate(args[0]);
