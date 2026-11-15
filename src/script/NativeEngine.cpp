@@ -363,7 +363,7 @@ class Interpreter {
             }
             return {Value{},"$"+name};
         }
-        throw std::runtime_error("Unsupported JavaScript primary expression");
+        throw std::runtime_error("Unsupported JavaScript primary near token: " + Peek().text + " at " + std::to_string(Peek().offset));
     }
     Value CallFunction(const Value& value,const std::vector<Value>& args) {
         const auto first = args.empty()?Value{}:args.front();
