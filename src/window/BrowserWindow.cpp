@@ -1,6 +1,7 @@
 #include "window/BrowserWindow.h"
 #include "util/Url.h"
 #include "script/ScriptRuntime.h"
+#include "script/EmbeddedEngine.h"
 #include "html/TextEncoding.h"
 #include <windowsx.h>
 #include <commctrl.h>
@@ -345,13 +346,13 @@ void BrowserWindow::WorkerLoop() {
                 std::unordered_map<std::string,std::string> scriptBodies;
                 for (const auto& scriptUrl : scriptUrls) {
                     if (job->generation != newestRequest_.load()) break;
-                    const auto jsResponse = http.Get(scriptUrl,256*1024);
+                    const auto jsResponse = http.Get(scriptUrl,4*1024*1024);
                     if (jsResponse.Ok() && jsResponse.status < 400 &&
                         !jsResponse.body.empty()) {
                         scriptBodies.emplace(url::ToUtf8(scriptUrl),jsResponse.body);
                     }
                 }
-                const auto scriptResult = script::Execute(result->document,response.url,scriptBodies);
+                const auto scriptResult = script::ExecuteEmbedded(result->document,response.url,scriptBodies);
                 if (scriptResult.navigation != response.url)
                     result->scriptRedirect = scriptResult.navigation;
             }
