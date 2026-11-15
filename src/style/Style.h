@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,7 @@ struct Computed {
     bool underline = false;
     bool block = false;
     bool hidden = false;
+    std::unordered_map<std::string, std::string> variables; // Inherited CSS custom properties.
 };
 
 class Sheet {
