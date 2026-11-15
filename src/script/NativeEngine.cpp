@@ -59,9 +59,11 @@ struct Value {
         }
         if(kind==Kind::Array && array) {
             std::string result;
-            for(const auto& item:*array) {
-                if(!result.empty()) result += ",";
-                result += item.kind==Kind::Undefined?"":item.String();
+            for(size_t index=0;index<array->size();++index) {
+                if(index) result += ",";
+                const auto& item=(*array)[index];
+                if(item.kind!=Kind::Undefined && item.kind!=Kind::Null)
+                    result += item.String();
             }
             return result;
         }
@@ -736,7 +738,13 @@ class Interpreter {
                      a.kind==Value::Kind::Number || a.kind==Value::Kind::Boolean
                         ? a.number==b.number :
                      a.kind==Value::Kind::Undefined || a.kind==Value::Kind::Null ? true :
-                     a.kind==Value::Kind::Element ? a.element==b.element : false);
+                     a.kind==Value::Kind::Element ? a.element==b.element :
+                     a.kind==Value::Kind::Array ? a.array==b.array :
+                     a.kind==Value::Kind::Object ? a.object==b.object :
+                     a.kind==Value::Kind::Document ||
+                     a.kind==Value::Kind::Window ||
+                     a.kind==Value::Kind::Location ? true :
+                     a.kind==Value::Kind::Function ? a.text==b.text : false);
                 left.value=Value::Bool(op=="==="?equal:!equal);
             }
             else if(op=="==" || op=="!=") {
