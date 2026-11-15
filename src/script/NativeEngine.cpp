@@ -392,7 +392,7 @@ class Interpreter {
             if(name=="null") return {Value::Special(Value::Kind::Null),{}};
             if(name=="undefined") return {};
             if(name=="document") return {Value::Special(Value::Kind::Document),"document"};
-            if(name=="window" || name=="self" || name=="globalThis")
+            if(name=="window" || name=="self" || name=="globalThis" || name=="this")
                 return {Value::Special(Value::Kind::Window),"window"};
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
@@ -529,7 +529,18 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Json &&
+                    if(result.value.kind==Value::Kind::Function &&
+                       (member=="call" || member=="apply")) {
+                        std::vector<Value> forwarded;
+                        if(member=="call") {
+                            if(args.size()>1)
+                                forwarded.assign(args.begin()+1,args.end());
+                        } else if(args.size()>1 &&
+                                  args[1].kind==Value::Kind::Array && args[1].array) {
+                            forwarded=*args[1].array;
+                        }
+                        result={CallFunction(result.value,forwarded),{}};
+                    } else if(result.value.kind==Value::Kind::Json &&
                        member=="parse") {
                         if(args.empty()) throw std::runtime_error("JSON.parse requires input");
                         result={js::ParseJson(args[0].String()),{}};
