@@ -419,6 +419,22 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestDomElementReferences() {
+    auto document = ac::html::Parse(
+        "<html><body><div id='result'></div>"
+        "<script>const element = document.getElementById('result');"
+        "let answer = 6 * 7;"
+        "element.innerHTML = '<p>Answer: ' + answer + '</p>';"
+        "</script></body></html>");
+    auto result = ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(result.engineReady && result.unsupported == 0,
+          "native JavaScript supports DOM references held in variables");
+    const auto* paragraph = Find(*document.root,"p");
+    Check(paragraph && !paragraph->children.empty() &&
+          paragraph->children.front()->text == "Answer: 42",
+          "DOM property setter resolves element reference");
+}
+
 void TestEmbeddedJavascript() {
     auto document = ac::html::Parse(
         "<html><head><title>Initial</title></head><body>"
@@ -546,6 +562,7 @@ int main() {
         TestEmbeddedJavascript();
         TestDomQuerySelectors();
         TestNativeJavaScriptLexer();
+        TestDomElementReferences();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
