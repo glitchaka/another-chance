@@ -89,6 +89,17 @@ bool HasClass(const Node& node,std::string_view name) {
     while(stream>>word) if(word==name) return true;
     return false;
 }
+void FindAll(Node* root,std::string_view selector,std::vector<Node*>& matches) {
+    if(!root || matches.size()>=10000) return;
+    if(root->type==Node::Type::Element && !selector.empty()) {
+        bool found=false;
+        if(selector.front()=='#') found=root->Attribute("id")==selector.substr(1);
+        else if(selector.front()=='.') found=HasClass(*root,selector.substr(1));
+        else found=root->tag==selector;
+        if(found) matches.push_back(root);
+    }
+    for(auto& child:root->children) FindAll(child.get(),selector,matches);
+}
 Node* FindSelector(Node* root,std::string_view selector) {
     if(!root || selector.empty()) return nullptr;
     if(root->type==Node::Type::Element) {
@@ -415,6 +426,40 @@ class Interpreter {
                         const auto selector=member=="getElementById"?"#"+argument:argument;
                         result={Value::NodeValue(FindSelector(doc_.root.get(),selector)),
                                 (member=="getElementById"?"id:":"selector:")+argument};
+                    } else if(result.value.kind==Value::Kind::Document &&
+                       (member=="querySelectorAll" ||
+                        member=="getElementsByTagName" ||
+                        member=="getElementsByClassName")) {
+                        const auto argument=args.empty()?std::string{}:args[0].String();
+                        const auto selector=member=="getElementsByClassName"
+                            ? "."+argument:argument;
+                        std::vector<Node*> matches;
+                        FindAll(doc_.root.get(),selector,matches);
+                        std::vector<Value> nodes;
+                        nodes.reserve(matches.size());
+                        for(Node* node:matches) nodes.push_back(Value::NodeValue(node));
+                        result={Value::ArrayValue(std::move(nodes)),{}};
+                    } else if(result.value.kind==Value::Kind::Array &&
+                              result.value.array && member=="push") {
+                        for(const auto& argument:args) result.value.array->push_back(argument);
+                        result={Value::Num(result.value.array->size()),{}};
+                    } else if(result.value.kind==Value::Kind::Array &&
+                              result.value.array && member=="pop") {
+                        Value popped;
+                        if(!result.value.array->empty()) {
+                            popped=result.value.array->back();
+                            result.value.array->pop_back();
+                        }
+                        result={popped,{}};
+                    } else if(result.value.kind==Value::Kind::Array &&
+                              result.value.array && member=="join") {
+                        const auto delimiter=args.empty()?std::string(","):args[0].String();
+                        std::string joined;
+                        for(size_t index=0; index<result.value.array->size(); ++index) {
+                            if(index) joined+=delimiter;
+                            joined+=(*result.value.array)[index].String();
+                        }
+                        result={Value::Str(std::move(joined)),{}};
                     } else if(result.value.kind==Value::Kind::Document && member=="write") {
                         auto* body=FindTag(doc_.root.get(),"body");
                         if(!body) body=doc_.root.get();
