@@ -419,6 +419,26 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeDomInsertion() {
+    auto doc = ac::html::Parse(
+        "<html><body><main id='app'></main>"
+        "<script>"
+        "const parent = document.getElementById('app');"
+        "const child = document.createElement('p');"
+        "child.setAttribute('id', 'generated');"
+        "child.textContent = 'DOM created natively';"
+        "parent.appendChild(child);"
+        "</script></body></html>");
+    const auto status=ac::script::ExecuteNative(doc,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported == 0,
+          "native DOM creation script executes");
+    const auto* child=Find(*doc.root,"p");
+    Check(child && child->Attribute("id")=="generated" &&
+          !child->children.empty() &&
+          child->children.front()->text=="DOM created natively",
+          "createElement and appendChild produce owned DOM nodes");
+}
+
 void TestDomElementReferences() {
     auto document = ac::html::Parse(
         "<html><body><div id='result'></div>"
@@ -563,6 +583,7 @@ int main() {
         TestDomQuerySelectors();
         TestNativeJavaScriptLexer();
         TestDomElementReferences();
+        TestNativeDomInsertion();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
