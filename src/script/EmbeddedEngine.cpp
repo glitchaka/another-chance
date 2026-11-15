@@ -2,6 +2,7 @@
 #include "util/Url.h"
 #include "quickjs.h"
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -44,9 +45,38 @@ Node* FindId(Node* current, std::string_view id) {
         if (Node* found = FindId(child.get(), id)) return found;
     return nullptr;
 }
+bool MatchesSelector(const Node& node, std::string_view selector) {
+    if (node.type != Node::Type::Element || selector.empty()) return false;
+    if (selector.front() == '#') return node.Attribute("id") == selector.substr(1);
+    if (selector.front() == '.') {
+        const auto classes = node.Attribute("class");
+        const auto wanted = selector.substr(1);
+        size_t index = 0;
+        while (index < classes.size()) {
+            while (index < classes.size() &&
+                   std::isspace(static_cast<unsigned char>(classes[index]))) ++index;
+            const size_t start = index;
+            while (index < classes.size() &&
+                   !std::isspace(static_cast<unsigned char>(classes[index]))) ++index;
+            if (start != index && std::string_view(classes).substr(start,index-start) == wanted)
+                return true;
+        }
+        return false;
+    }
+    return node.tag == selector;
+}
+Node* FindSelector(Node* node, std::string_view selector) {
+    if (!node) return nullptr;
+    if (MatchesSelector(*node,selector)) return node;
+    for (auto& child : node->children)
+        if (auto* found = FindSelector(child.get(),selector)) return found;
+    return nullptr;
+}
 Node* Element(State& state, std::string_view id) {
-    return id == "@body" ? FindTag(state.document->root.get(), "body") :
-                           FindId(state.document->root.get(), id);
+    if (id == "@body") return FindTag(state.document->root.get(), "body");
+    if (id.starts_with("@selector:"))
+        return FindSelector(state.document->root.get(),id.substr(10));
+    return FindId(state.document->root.get(), id);
 }
 void Text(Node& node, std::string& output) {
     if (node.type == Node::Type::Text) output += node.text;
@@ -192,7 +222,8 @@ constexpr char kDomBootstrap[] = R"JAVASCRIPT(
         getElementById(id) { return element(String(id)); },
         querySelector(s) {
             const selector = String(s);
-            return selector.startsWith("#") ? element(selector.slice(1)) : null;
+            if (selector.startsWith("#")) return element(selector.slice(1));
+            return element("@selector:" + selector);
         },
         write(...parts) { __acWrite("@body", "write", parts.join("")); },
         get location() { return locationObject; },
