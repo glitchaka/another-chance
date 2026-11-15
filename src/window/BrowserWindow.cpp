@@ -32,6 +32,52 @@ void SetControlFont(HWND handle) {
                  reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
 }
 
+// Follow immediate HTML refresh redirects before attempting to render the page.
+// This is navigation handling, not a substitute for a JavaScript engine.
+std::wstring ImmediateMetaRefresh(const ac::html::Node& node, std::wstring_view base) {
+    if (node.tag == "meta") {
+        auto equiv = node.Attribute("http-equiv");
+        std::transform(equiv.begin(), equiv.end(), equiv.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (equiv == "refresh") {
+            const auto content = node.Attribute("content");
+            const auto semicolon = content.find(';');
+            if (semicolon != std::string::npos) {
+                const auto seconds = content.substr(0,semicolon);
+                // Only immediate redirects; do not silently skip delayed pages.
+                if (seconds.find_first_not_of(" \t0.") == std::string::npos) {
+                    auto directive = content.substr(semicolon + 1);
+                    const auto begin = directive.find_first_not_of(" \t");
+                    if (begin != std::string::npos) directive.erase(0,begin);
+                    if (directive.size() >= 4) {
+                        std::string prefix = directive.substr(0,4);
+                        std::transform(prefix.begin(), prefix.end(), prefix.begin(),
+                                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                        if (prefix == "url=") {
+                            auto location = directive.substr(4);
+                            const auto first = location.find_first_not_of(" \t");
+                            if (first != std::string::npos) location.erase(0,first);
+                            else location.clear();
+                            const auto last = location.find_last_not_of(" \t");
+                            if (last != std::string::npos) location.erase(last + 1);
+                            if (location.size() >= 2 &&
+                                ((location.front() == '\'' && location.back() == '\'') ||
+                                 (location.front() == '"' && location.back() == '"')))
+                                location = location.substr(1,location.size()-2);
+                            auto target = ac::url::Resolve(base,ac::url::ToWide(location));
+                            if (ac::url::IsWeb(target)) return target;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (const auto& child : node.children) {
+        if (auto target = ImmediateMetaRefresh(*child,base); !target.empty()) return target;
+    }
+    return {};
+}
+
 void CollectStyleSheets(const ac::html::Node& node, const std::wstring& base,
                         std::vector<std::wstring>& urls,
                         std::unordered_set<std::wstring>& known) {
@@ -257,6 +303,21 @@ void BrowserWindow::WorkerLoop() {
         result->generation = job->generation;
         result->response = job->post ?
             http.Post(job->url,job->body) : http.Get(job->url);
+        // Bounded redirect chain for pages using <meta http-equiv="refresh">.
+        // WinHTTP already handles ordinary HTTP Location redirects.
+        std::unordered_set<std::wstring> refreshVisited{job->url};
+        for (int redirects = 0; redirects < 5 && result->response.Ok(); ++redirects) {
+            if (job->generation != newestRequest_.load()) break;
+            const auto content = html::DecodeToUtf8(result->response.body,
+                                                     result->response.contentType);
+            auto candidate = html::Parse(content);
+            if (!candidate.root) break;
+            const auto next = ImmediateMetaRefresh(*candidate.root,result->response.url);
+            if (next.empty() || !refreshVisited.insert(next).second) break;
+            auto redirected = http.Get(next);
+            if (!redirected.Ok()) break;
+            result->response = std::move(redirected);
+        }
         if (result->response.Ok()) {
             const auto& response = result->response;
             if (!response.contentType.empty() &&
