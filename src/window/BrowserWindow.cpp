@@ -356,6 +356,7 @@ void BrowserWindow::WorkerLoop() {
                     }
                 }
                 const auto scriptResult = script::ExecuteEmbedded(result->document,response.url,scriptBodies);
+                result->scriptingReady = scriptResult.engineReady;
                 if (scriptResult.navigation != response.url)
                     result->scriptRedirect = scriptResult.navigation;
             }
@@ -715,6 +716,7 @@ void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     images_.Clear();
     formControls_.Clear();
     document_ = std::make_unique<html::Document>(std::move(result->document));
+    sheet_.SetScriptingEnabled(result->scriptingReady);
     sheet_.Parse(document_->embeddedCss);
     scrollY_ = 0;
     Reflow();
