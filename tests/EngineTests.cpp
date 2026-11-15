@@ -419,6 +419,24 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeLoopControl() {
+    auto document=ac::html::Parse(
+        "<html><body><p id='result'>Before</p><script>"
+        "let count = 0; let score = 0;"
+        "while (count < 9) { count++; if (count === 2) continue;"
+        "if (count === 5) break; score += count; }"
+        "for (let i=0; i<10; i++) { if (i===2) continue;"
+        "if (i===4) break; score += i; }"
+        "document.getElementById('result').textContent = String(score);"
+        "</script></body></html>");
+    const auto state=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(state.engineReady && state.unsupported==0,
+          "native break/continue loops terminate correctly");
+    const auto* node=Find(*document.root,"p");
+    Check(node && !node->children.empty() && node->children.front()->text=="12",
+          "while and for loop break/continue semantics");
+}
+
 void TestNativeStandardBuiltins() {
     auto document=ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -692,6 +710,7 @@ int main() {
         TestNativeCollections();
         TestNativePrimitiveSemantics();
         TestNativeStandardBuiltins();
+        TestNativeLoopControl();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
