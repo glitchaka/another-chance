@@ -351,7 +351,9 @@ void BrowserWindow::WorkerLoop() {
                         scriptBodies.emplace(url::ToUtf8(scriptUrl),jsResponse.body);
                     }
                 }
-                script::Execute(result->document,response.url,scriptBodies);
+                const auto scriptResult = script::Execute(result->document,response.url,scriptBodies);
+                if (scriptResult.navigation != response.url)
+                    result->scriptRedirect = scriptResult.navigation;
             }
         } else {
             result->document = html::Parse(
@@ -587,6 +589,7 @@ void BrowserWindow::Navigate(std::wstring address, bool recordHistory,
         SetStatus(L"Búsqueda mediante el proveedor seleccionado...");
     }
     if (recordHistory) {
+        scriptRedirectDepth_ = 0;
         if (!history_.empty()) {
             history_.erase(history_.begin() + static_cast<std::ptrdiff_t>(historyIndex_ + 1),
                            history_.end());
@@ -694,6 +697,11 @@ void BrowserWindow::Reflow() {
 void BrowserWindow::OnPageReady(LoadedPage* rawResult) {
     std::unique_ptr<LoadedPage> result(rawResult);
     if (!result || result->generation != generation_) return;
+    if (!result->scriptRedirect.empty() && scriptRedirectDepth_ < 5) {
+        ++scriptRedirectDepth_;
+        Navigate(result->scriptRedirect, false);
+        return;
+    }
     isLoading_ = false;
     if (url::IsWeb(result->response.url)) {
         currentUrl_ = result->response.url;
