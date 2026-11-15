@@ -64,6 +64,17 @@ int main() {
              "window.google.c=window.google.c||{cap:0};"
              "(function(){var local=7;google.c.cap=local*6;})();"
              "document.getElementById('result').textContent=String(google.c.cap);","42");
+        Test("google-style-iife",
+             "window.google=window.google||{};"
+             "(function(){var active=false;"
+             "(function(){active&&google.tick('load','start');}).call(this);"
+             "})();"
+             "document.getElementById('result').textContent='OK';","OK");
+        Test("function-call-apply",
+             "function sum(a,b){return a+b;}"
+             "document.getElementById('result').textContent="
+             "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
+             "42/42");
         Test("function-expression",
              "const twice=function(v){return v*2;};"
              "document.getElementById('result').textContent=String(twice(21));","42");
