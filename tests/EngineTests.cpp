@@ -419,6 +419,21 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeControlFlow() {
+    auto doc = ac::html::Parse(
+        "<html><body><p id='result'>Before</p><script>"
+        "let total = 0; let count = 0;"
+        "while (count < 4) { count++; total += count; }"
+        "if (total === 10) document.getElementById('result').textContent = 'OK';"
+        "else document.getElementById('result').textContent = 'FAIL';"
+        "</script></body></html>");
+    const auto state = ac::script::ExecuteNative(doc,L"https://example.org/",{});
+    Check(state.engineReady && state.unsupported == 0, "native while and if executed");
+    const auto* node = Find(*doc.root,"p");
+    Check(node && !node->children.empty() && node->children.front()->text=="OK",
+          "bounded JavaScript control flow updates the DOM");
+}
+
 void TestNativeDomInsertion() {
     auto doc = ac::html::Parse(
         "<html><body><main id='app'></main>"
@@ -584,6 +599,7 @@ int main() {
         TestNativeJavaScriptLexer();
         TestDomElementReferences();
         TestNativeDomInsertion();
+        TestNativeControlFlow();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
