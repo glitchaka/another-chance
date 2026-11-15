@@ -41,7 +41,11 @@ struct Value {
     static Value Num(double n) {Value v;v.kind=Kind::Number;v.number=n;return v;}
     static Value Str(std::string s) {Value v;v.kind=Kind::Text;v.text=std::move(s);return v;}
     static Value Bool(bool b) {Value v;v.kind=Kind::Boolean;v.number=b?1:0;return v;}
-    static Value NodeValue(Node* n) {Value v;v.kind=Kind::Element;v.element=n;return v;}
+    static Value NodeValue(Node* n) {
+        Value v;
+        if(!n) {v.kind=Kind::Null;return v;}
+        v.kind=Kind::Element;v.element=n;return v;
+    }
     static Value Special(Kind k) {Value v;v.kind=k;return v;}
     std::string String() const {
         if(kind==Kind::Text) return text;
@@ -63,6 +67,7 @@ struct Value {
     }
     double Number() const {
         if(kind==Kind::Number || kind==Kind::Boolean) return number;
+        if(kind==Kind::Null) return 0;
         if(kind==Kind::Text) {
             char* end=nullptr;
             double x=std::strtod(text.c_str(),&end);
