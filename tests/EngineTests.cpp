@@ -419,6 +419,16 @@ void TestDomQuerySelectors() {
           "native querySelector DOM changes visible nodes");
 }
 
+void TestNativeDiagnostics() {
+    auto document=ac::html::Parse(
+        "<html><body><script>throw 'specific native error';</script></body></html>");
+    const auto status=ac::script::ExecuteNative(document,L"https://example.org/",{});
+    Check(status.engineReady && status.unsupported==1,
+          "uncaught native script exceptions are counted");
+    Check(status.lastError.find("specific native error")!=std::string::npos,
+          "uncaught exception message remains visible for diagnosis");
+}
+
 void TestNativeExceptions() {
     auto document=ac::html::Parse(
         "<html><body><p id='result'></p><script>"
@@ -728,6 +738,7 @@ int main() {
         TestNativeStandardBuiltins();
         TestNativeLoopControl();
         TestNativeExceptions();
+        TestNativeDiagnostics();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
