@@ -126,7 +126,11 @@ class Interpreter {
     };
     const Token& Peek() const {return tokens_[pos_];}
     bool Match(std::string_view text) {
-        if(Peek().text==text) {++pos_;return true;}
+        // A string literal may contain "+" / "-" / ";" / "if" etc.
+        // Token text alone is not sufficient to recognize grammar tokens.
+        if((Peek().kind==TokenKind::Symbol ||
+            Peek().kind==TokenKind::Identifier) &&
+           Peek().text==text) {++pos_;return true;}
         return false;
     }
     void Expect(std::string_view text) {
