@@ -14,6 +14,7 @@ void Utf8(std::string& output, unsigned cp) {
         output += static_cast<char>(0x80 | (cp & 63));
     } else {
         output += static_cast<char>(0xe0 | (cp >> 12));
+        output += static_cast<char>(0x80 | ((cp >> 6) & 63));
         output += static_cast<char>(0x80 | (cp & 63));
     }
 }
