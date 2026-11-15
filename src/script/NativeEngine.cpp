@@ -20,11 +20,17 @@ using js::Token;
 using js::TokenKind;
 
 struct Value {
-    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window };
+    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
     Node* element=nullptr;
+    std::shared_ptr<std::vector<Value>> array;
+    static Value ArrayValue(std::vector<Value> items) {
+        Value v;v.kind=Kind::Array;
+        v.array=std::make_shared<std::vector<Value>>(std::move(items));
+        return v;
+    }
     static Value Num(double n) {Value v;v.kind=Kind::Number;v.number=n;return v;}
     static Value Str(std::string s) {Value v;v.kind=Kind::Text;v.text=std::move(s);return v;}
     static Value Bool(bool b) {Value v;v.kind=Kind::Boolean;v.number=b?1:0;return v;}
@@ -35,6 +41,14 @@ struct Value {
         if(kind==Kind::Boolean) return number?"true":"false";
         if(kind==Kind::Number) {
             std::ostringstream s;s<<std::setprecision(15)<<number;return s.str();
+        }
+        if(kind==Kind::Array && array) {
+            std::string result;
+            for(const auto& item:*array) {
+                if(!result.empty()) result += ",";
+                result += item.kind==Kind::Undefined?"":item.String();
+            }
+            return result;
         }
         if(kind==Kind::Undefined) return "undefined";
         return "[object Object]";
@@ -154,6 +168,8 @@ class Interpreter {
         if(base.kind==Value::Kind::Location && name=="href")
             return Value::Str(ac::url::ToUtf8(base_));
         if(base.kind==Value::Kind::Text && name=="length") return Value::Num(base.text.size());
+        if(base.kind==Value::Kind::Array && base.array && name=="length")
+            return Value::Num(base.array->size());
         if(base.kind==Value::Kind::Element && base.element) {
             if(name=="id" || name=="value" || name=="className")
                 return Value::Str(base.element->Attribute(name=="className"?"class":name));
@@ -196,6 +212,14 @@ class Interpreter {
     Result Primary() {
         Tick();
         if(Match("(")) {auto v=Expression();Expect(")");return {v.value,{}};}
+        if(Match("[")) {
+            std::vector<Value> elements;
+            if(!Match("]")) {
+                do {elements.push_back(Expression(2).value);} while(Match(","));
+                Expect("]");
+            }
+            return {Value::ArrayValue(std::move(elements)),{}};
+        }
         if(Match("!")) return {Value::Bool(!Primary().value.Truth()),{}};
         if(Match("-")) return {Value::Num(-Primary().value.Number()),{}};
         if(Match("+")) return {Value::Num(Primary().value.Number()),{}};
@@ -221,7 +245,25 @@ class Interpreter {
     Result Postfix() {
         auto result=Primary();
         while(true) {
-            if(Match(".")) {
+            if(Match("[")) {
+                const auto key=Expression().value;
+                Expect("]");
+                if(result.value.kind==Value::Kind::Array && result.value.array) {
+                    const auto index=key.Number();
+                    const auto count=result.value.array->size();
+                    if(std::isfinite(index) && index>=0 && index<count &&
+                       std::floor(index)==index)
+                        result.value=(*result.value.array)[static_cast<size_t>(index)];
+                    else result.value={};
+                } else if(result.value.kind==Value::Kind::Text) {
+                    const auto index=key.Number();
+                    if(std::isfinite(index) && index>=0 && index<result.value.text.size() &&
+                       std::floor(index)==index)
+                        result.value=Value::Str(std::string(1,result.value.text[static_cast<size_t>(index)]));
+                    else result.value={};
+                } else result.value={};
+                result.path.clear();
+            } else if(Match(".")) {
                 if(Peek().kind!=TokenKind::Identifier) throw std::runtime_error("Expected member name");
                 const auto member=tokens_[pos_++].text;
                 if(Match("(")) {
