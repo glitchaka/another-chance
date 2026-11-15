@@ -26,7 +26,8 @@ do {
         Start-Sleep -Milliseconds 350
     }
 } while ([DateTime]::UtcNow -lt $deadline)
-Write-Error ("No se puede reemplazar '{0}' tras {1} s. Windows informa: {2}. " +
+$message = ("No se puede reemplazar '{0}' tras {1} s. Windows informa: {2}. " +
     "No se cerraron procesos ni se eliminó el archivo. Verifica permisos, " +
     "antivirus y procesos que tengan abierto el ejecutable.") -f $Executable, $TimeoutSeconds, $lastError
+Write-Error $message
 exit 1
