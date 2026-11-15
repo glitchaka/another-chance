@@ -21,12 +21,18 @@ using js::Token;
 using js::TokenKind;
 
 struct Value {
-    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array, Function };
+    enum class Kind { Undefined, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
     Node* element=nullptr;
     std::shared_ptr<std::vector<Value>> array;
+    std::shared_ptr<std::unordered_map<std::string,Value>> object;
+    static Value ObjectValue(std::unordered_map<std::string,Value> props) {
+        Value v;v.kind=Kind::Object;
+        v.object=std::make_shared<std::unordered_map<std::string,Value>>(std::move(props));
+        return v;
+    }
     static Value ArrayValue(std::vector<Value> items) {
         Value v;v.kind=Kind::Array;
         v.array=std::make_shared<std::vector<Value>>(std::move(items));
@@ -149,7 +155,12 @@ class Interpreter {
     std::vector<Token> tokens_;
     size_t pos_=0;
     unsigned steps_=0;
-    struct Result {Value value;std::string path;Node* propertyNode=nullptr;};
+    struct Result {
+        Value value;
+        std::string path;
+        Node* propertyNode=nullptr;
+        std::shared_ptr<std::unordered_map<std::string,Value>> propertyObject;
+    };
     const Token& Peek() const {return tokens_[pos_];}
     bool Match(std::string_view text) {
         if(Peek().text==text) {++pos_;return true;}
@@ -173,6 +184,10 @@ class Interpreter {
         }
         if(base.kind==Value::Kind::Location && name=="href")
             return Value::Str(ac::url::ToUtf8(base_));
+        if(base.kind==Value::Kind::Object && base.object) {
+            auto property=base.object->find(name);
+            return property==base.object->end()?Value{}:property->second;
+        }
         if(base.kind==Value::Kind::Text && name=="length") return Value::Num(base.text.size());
         if(base.kind==Value::Kind::Array && base.array && name=="length")
             return Value::Num(base.array->size());
@@ -190,6 +205,12 @@ class Interpreter {
         if(ac::url::IsWeb(url)) {stats_.navigation=url;++stats_.operations;}
     }
     void Write(const Result& target,const Value& value) {
+        if(target.propertyObject) {
+            const auto delimiter=target.path.rfind('|');
+            if(delimiter==std::string::npos) throw std::runtime_error("Invalid object property");
+            (*target.propertyObject)[target.path.substr(delimiter+1)]=value;
+            return;
+        }
         if(target.propertyNode) {
             const auto delimiter=target.path.rfind('|');
             if(delimiter==std::string::npos) throw std::runtime_error("Invalid element property");
@@ -231,6 +252,27 @@ class Interpreter {
     Result Primary() {
         Tick();
         if(Match("(")) {auto v=Expression();Expect(")");return {v.value,{}};}
+        if(Match("{")) {
+            std::unordered_map<std::string,Value> properties;
+            if(!Match("}")) {
+                do {
+                    if(Peek().kind!=TokenKind::Identifier &&
+                       Peek().kind!=TokenKind::String &&
+                       Peek().kind!=TokenKind::Number)
+                        throw std::runtime_error("Invalid JavaScript object key");
+                    const auto key=tokens_[pos_++].text;
+                    Value value;
+                    if(Match(":")) value=Expression(2).value;
+                    else {
+                        auto existing=vars_.find(key);
+                        value=existing==vars_.end()?Value{}:existing->second;
+                    }
+                    properties.insert_or_assign(key,std::move(value));
+                } while(Match(","));
+                Expect("}");
+            }
+            return {Value::ObjectValue(std::move(properties)),{}};
+        }
         if(Match("[")) {
             std::vector<Value> elements;
             if(!Match("]")) {
@@ -330,6 +372,12 @@ class Interpreter {
                        std::floor(index)==index)
                         result.value=(*result.value.array)[static_cast<size_t>(index)];
                     else result.value={};
+                } else if(result.value.kind==Value::Kind::Object && result.value.object) {
+                    auto owner=result.value.object;
+                    auto found=owner->find(key.String());
+                    result.value=found==owner->end()?Value{}:found->second;
+                    result.propertyObject=std::move(owner);
+                    result.path="object|"+key.String();
                 } else if(result.value.kind==Value::Kind::Text) {
                     const auto index=key.Number();
                     if(std::isfinite(index) && index>=0 && index<result.value.text.size() &&
@@ -337,7 +385,7 @@ class Interpreter {
                         result.value=Value::Str(std::string(1,result.value.text[static_cast<size_t>(index)]));
                     else result.value={};
                 } else result.value={};
-                result.path.clear();
+                if(!result.propertyObject) result.path.clear();
                 result.propertyNode=nullptr;
             } else if(Match(".")) {
                 if(Peek().kind!=TokenKind::Identifier) throw std::runtime_error("Expected member name");
@@ -431,9 +479,15 @@ class Interpreter {
                     else if(old.value.kind==Value::Kind::Element) {
                         result.path=old.path+"|"+member;
                         result.propertyNode=old.value.element;
+                        result.propertyObject.reset();
+                    } else if(old.value.kind==Value::Kind::Object) {
+                        result.path="object|"+member;
+                        result.propertyObject=old.value.object;
+                        result.propertyNode=nullptr;
                     } else {
                         result.path.clear();
                         result.propertyNode=nullptr;
+                        result.propertyObject.reset();
                     }
                 }
             } else if(Match("++")) {
