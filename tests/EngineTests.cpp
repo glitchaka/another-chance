@@ -2,6 +2,7 @@
 #include "html/TextEncoding.h"
 #include "script/ScriptRuntime.h"
 #include "script/NativeEngine.h"
+#include "script/JsLexer.h"
 #include <unordered_map>
 #include "style/Style.h"
 #include "util/Url.h"
@@ -392,6 +393,19 @@ void TestScriptDom() {
     DeleteDC(dc);
 }
 
+void TestNativeJavaScriptLexer() {
+    const auto tokens = ac::script::js::Tokenize(
+        "/* header */ const message = 'Hola\\u00f1'; // comment\\n"
+        "let number = 12.5; number += 2;");
+    Check(tokens.size() >= 12, "native JavaScript tokenizer produces tokens");
+    bool unicodeFound = false;
+    for (const auto& token : tokens)
+        if (token.kind == ac::script::js::TokenKind::String &&
+            token.text == "Hola\\xC3\\xB1")
+            unicodeFound = true;
+    Check(unicodeFound, "native JavaScript tokenizer expands Unicode escapes");
+}
+
 void TestDomQuerySelectors() {
     auto doc = ac::html::Parse(
         "<html><body><section class='panel featured'><span class='label'>Old</span></section>"
@@ -531,6 +545,7 @@ int main() {
         TestScriptDom();
         TestEmbeddedJavascript();
         TestDomQuerySelectors();
+        TestNativeJavaScriptLexer();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
