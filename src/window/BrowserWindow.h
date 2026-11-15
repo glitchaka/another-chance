@@ -60,6 +60,7 @@ private:
         unsigned generation = 0;
         net::Response response;
         html::Document document;
+        std::wstring scriptRedirect;
     };
 
     struct LoadedImage {
@@ -109,6 +110,7 @@ private:
     int clientWidth_ = 980;
     int clientHeight_ = 690;
     unsigned generation_ = 0;
+    unsigned scriptRedirectDepth_ = 0;
     std::atomic<unsigned> newestRequest_{0};
     bool isLoading_ = false;
 
