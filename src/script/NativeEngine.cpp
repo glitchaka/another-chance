@@ -105,7 +105,11 @@ class Interpreter {
     std::wstring base_;
     Execution& stats_;
     std::unordered_map<std::string,Value> vars_;
-    struct Function { std::vector<std::string> parameters; std::vector<Token> body; };
+    struct Function {
+        std::vector<std::string> parameters;
+        std::vector<Token> body;
+        std::shared_ptr<std::unordered_map<std::string,Value>> captured;
+    };
     std::unordered_map<std::string,Function> functions_;
     struct ReturnSignal { Value value; };
     struct ThrowSignal { Value value; };
@@ -234,6 +238,8 @@ class Interpreter {
         Expect("=>");
         Function fn;
         fn.parameters=std::move(parameters);
+        if(callDepth_>0)
+            fn.captured=std::make_shared<std::unordered_map<std::string,Value>>(vars_);
         if(Peek().text=="{") {
             const size_t start=pos_;
             int nesting=0;
@@ -286,6 +292,8 @@ class Interpreter {
                 declaredName=tokens_[pos_++].text;
             Expect("(");
             Function fn;
+            if(callDepth_>0)
+                fn.captured=std::make_shared<std::unordered_map<std::string,Value>>(vars_);
             if(!Match(")")) {
                 do {
                     if(Peek().kind!=TokenKind::Identifier)
@@ -480,6 +488,9 @@ class Interpreter {
         auto savedTokens=std::move(tokens_);
         const size_t savedPosition=pos_;
         auto savedVariables=vars_;
+        if(function.captured)
+            for(const auto& [key,val]:*function.captured)
+                vars_.insert_or_assign(key,val);
         for(size_t i=0;i<function.parameters.size();++i)
             vars_[function.parameters[i]]=i<args.size()?args[i]:Value{};
         tokens_=function.body;
@@ -497,6 +508,17 @@ class Interpreter {
             loopDepth_=outerLoopDepth;
             throw;
         }
+        // A returned nested function retains its lexical variables.
+        if(function.captured)
+            for(auto& [key,old]:*function.captured) {
+                bool isParameter=false;
+                for(const auto& parameter:function.parameters)
+                    if(key==parameter) {isParameter=true;break;}
+                if(!isParameter) {
+                    const auto updated=vars_.find(key);
+                    if(updated!=vars_.end()) old=updated->second;
+                }
+            }
         // Update preexisting outer bindings without leaking function-local names.
         for(auto& [name,old]:savedVariables) {
             bool parameter=false;
@@ -959,6 +981,8 @@ class Interpreter {
             const std::string name=tokens_[pos_++].text;
             Expect("(");
             Function function;
+            if(callDepth_>0)
+                function.captured=std::make_shared<std::unordered_map<std::string,Value>>(vars_);
             if(!Match(")")) {
                 do {
                     if(Peek().kind!=TokenKind::Identifier)
