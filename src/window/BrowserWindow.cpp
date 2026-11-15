@@ -5,6 +5,7 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <string>
 #include <utility>
