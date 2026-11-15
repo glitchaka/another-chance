@@ -1,6 +1,7 @@
 #include "html/HtmlParser.h"
 #include "html/TextEncoding.h"
 #include "script/ScriptRuntime.h"
+#include "script/EmbeddedEngine.h"
 #include <unordered_map>
 #include "style/Style.h"
 #include "util/Url.h"
@@ -364,6 +365,40 @@ void TestScriptDom() {
     DeleteDC(dc);
 }
 
+void TestEmbeddedJavascript() {
+    auto document = ac::html::Parse(
+        "<html><head><title>Initial</title></head><body>"
+        "<div id='output'></div><script>"
+        "let sum = 0; for (let i = 1; i <= 5; ++i) sum += i;"
+        "document.getElementById('output').textContent = 'Total ' + sum;"
+        "document.title = 'ECMAScript OK';"
+        "</script></body></html>");
+    auto result = ac::script::ExecuteEmbedded(document, L"https://example.org/", {});
+    Check(result.scripts == 1 && result.unsupported == 0,
+          "embedded ECMAScript executes arithmetic, loops and DOM bindings");
+    Check(document.title == "ECMAScript OK",
+          "embedded ECMAScript modifies document title");
+    const auto* output = Find(*document.root, "div");
+    Check(output && !output->children.empty() &&
+          output->children.front()->text == "Total 15",
+          "embedded ECMAScript populates DOM with computed data");
+    auto next = ac::html::Parse(
+        "<html><body><script>"
+        "const paths = ['/old','/new'];"
+        "window.location.assign(paths[1]);"
+        "</script></body></html>");
+    const auto navigation = ac::script::ExecuteEmbedded(
+        next, L"https://example.org/index", {});
+    Check(navigation.navigation == L"https://example.org/new",
+          "computed JavaScript location navigation resolves");
+    auto malicious = ac::html::Parse(
+        "<script>location.href = 'javascript:alert(1)'</script>");
+    const auto blocked = ac::script::ExecuteEmbedded(
+        malicious, L"https://example.org/", {});
+    Check(blocked.navigation.empty(),
+          "embedded ECMAScript rejects non-web navigation schemes");
+}
+
 void TestHtmlEncoding() {
     const std::string latin1="<html><body>Espa\xF1ol</body></html>";
     const auto converted=ac::html::DecodeToUtf8(latin1,L"text/html; charset=ISO-8859-1");
@@ -453,6 +488,7 @@ int main() {
         TestDisplayCascade();
         TestUrls();
         TestScriptDom();
+        TestEmbeddedJavascript();
         TestScreenRects();
         TestLayoutGeometry();
         std::cout << "HTML, CSS y URL: OK\n";
