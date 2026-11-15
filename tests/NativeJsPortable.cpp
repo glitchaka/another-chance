@@ -27,7 +27,10 @@ void Test(const char* name,std::string_view source,std::string_view expected) {
     }
     const auto* p=Find(doc.root.get(),"p");
     Check(p && !p->children.empty(),"No result element");
-    Check(p->children.front()->text==expected,"Unexpected DOM output");
+    if(p->children.front()->text!=expected) {
+        std::cerr<<name<<": expected ["<<expected<<"] actual ["<<p->children.front()->text<<"]\n";
+        throw std::runtime_error("Unexpected DOM output");
+    }
 }
 }
 int main() {
@@ -49,6 +52,13 @@ int main() {
              "document.getElementById('result').textContent="
              "String(value.count)+'/'+JSON.stringify({ok:true});",
              "42/{\"ok\":true}");
+        Test("logical",
+             "let calls=0; function side(){ calls++; return 999; }"
+             "const a=false && side(); const b=true || side();"
+             "const c='set' ?? side(); const d=null ?? 42;"
+             "document.getElementById('result').textContent="
+             "String(a)+'/'+String(b)+'/'+String(c)+'/'+String(d)+'/'+String(calls);",
+             "false/true/set/42/0");
         Test("conditional","const a=false?'bad':'ok';"
              "document.getElementById('result').textContent=a;","ok");
         auto tokens=ac::script::js::Tokenize("const text='Hola\\u00f1';");
