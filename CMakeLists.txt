@@ -20,6 +20,7 @@ add_executable(AnotherChance WIN32
     src/html/TextEncoding.cpp
     src/script/ScriptRuntime.cpp
     src/script/JsLexer.cpp
+    src/script/JsJson.cpp
     src/script/NativeEngine.cpp
     src/style/Style.cpp
     src/layout/Layout.cpp
@@ -44,6 +45,7 @@ if(BUILD_TESTING)
         src/html/TextEncoding.cpp
         src/script/ScriptRuntime.cpp
         src/script/JsLexer.cpp
+        src/script/JsJson.cpp
         src/script/NativeEngine.cpp
         src/style/Style.cpp
         src/util/Url.cpp
