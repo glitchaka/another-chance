@@ -177,6 +177,7 @@ class Interpreter {
     struct BreakSignal {};
     struct ContinueSignal {};
     unsigned loopDepth_=0;
+    unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
     std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
@@ -277,9 +278,79 @@ class Interpreter {
             ++stats_.operations;
         }
     }
+    Result ArrowFunction(std::vector<std::string> parameters) {
+        Expect("=>");
+        Function fn;
+        fn.parameters=std::move(parameters);
+        if(Peek().text=="{") {
+            const size_t start=pos_;
+            int nesting=0;
+            do {
+                if(Peek().kind==TokenKind::End)
+                    throw std::runtime_error("Unterminated arrow function block");
+                if(Peek().text=="{") ++nesting;
+                else if(Peek().text=="}") --nesting;
+                ++pos_;
+            } while(nesting>0);
+            fn.body.assign(tokens_.begin()+static_cast<std::ptrdiff_t>(start),
+                           tokens_.begin()+static_cast<std::ptrdiff_t>(pos_));
+        } else {
+            fn.body.push_back(Token{TokenKind::Symbol,"{",0,0});
+            fn.body.push_back(Token{TokenKind::Identifier,"return",0,0});
+            const size_t start=pos_;
+            unsigned parens=0,brackets=0,braces=0;
+            while(Peek().kind!=TokenKind::End) {
+                const auto token=Peek().text;
+                if(!parens && !brackets && !braces &&
+                   (token==";" || token=="," || token==")" ||
+                    token=="]" || token=="}")) break;
+                if(token=="(") ++parens;
+                else if(token=="[") ++brackets;
+                else if(token=="{") ++braces;
+                else if(token==")" && parens) --parens;
+                else if(token=="]" && brackets) --brackets;
+                else if(token=="}" && braces) --braces;
+                ++pos_;
+            }
+            if(pos_==start) throw std::runtime_error("Missing arrow function expression");
+            fn.body.insert(fn.body.end(),
+                           tokens_.begin()+static_cast<std::ptrdiff_t>(start),
+                           tokens_.begin()+static_cast<std::ptrdiff_t>(pos_));
+            fn.body.push_back(Token{TokenKind::Symbol,";",0,0});
+            fn.body.push_back(Token{TokenKind::Symbol,"}",0,0});
+        }
+        fn.body.push_back(Token{TokenKind::End,"",0,0});
+        const auto name="@arrow:"+std::to_string(++lambdaCounter_);
+        functions_.insert_or_assign(name,std::move(fn));
+        auto value=Value::Special(Value::Kind::Function);
+        value.text=name;
+        return {value,{}};
+    }
     Result Primary() {
         Tick();
-        if(Match("(")) {auto v=Expression();Expect(")");return {v.value,{}};}
+        if(Peek().kind==TokenKind::Identifier && pos_+1<tokens_.size() &&
+           tokens_[pos_+1].text=="=>") {
+            std::vector<std::string> parameters{tokens_[pos_++].text};
+            return ArrowFunction(std::move(parameters));
+        }
+        if(Match("(")) {
+            const size_t saved=pos_;
+            std::vector<std::string> parameters;
+            bool valid=true;
+            if(Peek().text!=")") {
+                while(true) {
+                    if(Peek().kind!=TokenKind::Identifier) {valid=false;break;}
+                    parameters.push_back(tokens_[pos_++].text);
+                    if(!Match(",")) break;
+                }
+            }
+            if(valid && Match(")") && Peek().text=="=>")
+                return ArrowFunction(std::move(parameters));
+            pos_=saved;
+            auto value=Expression();
+            Expect(")");
+            return {value.value,{}};
+        }
         if(Match("{")) {
             std::unordered_map<std::string,Value> properties;
             if(!Match("}")) {
