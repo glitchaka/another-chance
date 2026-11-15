@@ -1,22 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 project(AnotherChance VERSION 0.1.0 LANGUAGES C CXX RC)
 
-# Independent, embeddable ECMAScript runtime. No Chromium/Gecko/WebView dependency.
-# Bundle MSVC CRT so the Release EXE runs without installing VC++ Redistributable.
+# Link the MSVC runtime statically; JavaScript is implemented in-tree.
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
-
-include(FetchContent)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static third-party libraries" FORCE)
-set(QJS_ENABLE_INSTALL OFF CACHE BOOL "Do not install embedded QuickJS" FORCE)
-set(QJS_BUILD_EXAMPLES OFF CACHE BOOL "Skip QuickJS examples" FORCE)
-FetchContent_Declare(quickjs_ng
-    GIT_REPOSITORY https://github.com/quickjs-ng/quickjs.git
-    GIT_TAG v0.18.0
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(quickjs_ng)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Another Chance 0.1 requiere Windows (Win32, WinHTTP y GDI).")
@@ -31,7 +19,8 @@ add_executable(AnotherChance WIN32
     src/html/HtmlParser.cpp
     src/html/TextEncoding.cpp
     src/script/ScriptRuntime.cpp
-    src/script/EmbeddedEngine.cpp
+    src/script/JsLexer.cpp
+    src/script/NativeEngine.cpp
     src/style/Style.cpp
     src/layout/Layout.cpp
     src/forms/NativeFormControls.cpp
@@ -42,7 +31,7 @@ add_executable(AnotherChance WIN32
 target_compile_features(AnotherChance PRIVATE cxx_std_20)
 target_compile_definitions(AnotherChance PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(AnotherChance PRIVATE src)
-target_link_libraries(AnotherChance PRIVATE qjs winhttp shlwapi comctl32 gdi32 user32 windowscodecs ole32 msimg32 shell32 gdiplus)
+target_link_libraries(AnotherChance PRIVATE winhttp shlwapi comctl32 gdi32 user32 windowscodecs ole32 msimg32 shell32 gdiplus)
 # On Windows, security scanners or a stale file handle may briefly lock the
 # previous executable. Wait for the handle to be released before invoking LINK.
 # Do not kill unrelated processes or remove the existing binary.
@@ -66,7 +55,8 @@ if(BUILD_TESTING)
         src/html/HtmlParser.cpp
         src/html/TextEncoding.cpp
         src/script/ScriptRuntime.cpp
-        src/script/EmbeddedEngine.cpp
+        src/script/JsLexer.cpp
+    src/script/NativeEngine.cpp
         src/style/Style.cpp
         src/util/Url.cpp
         src/layout/Layout.cpp
@@ -75,7 +65,7 @@ if(BUILD_TESTING)
     target_compile_features(AnotherChanceTests PRIVATE cxx_std_20)
     target_compile_definitions(AnotherChanceTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_include_directories(AnotherChanceTests PRIVATE src)
-    target_link_libraries(AnotherChanceTests PRIVATE qjs shlwapi winhttp gdi32 user32 windowscodecs ole32 msimg32)
+    target_link_libraries(AnotherChanceTests PRIVATE shlwapi winhttp gdi32 user32 windowscodecs ole32 msimg32)
     if(MSVC)
         target_compile_options(AnotherChanceTests PRIVATE /W4 /permissive- /utf-8 /EHsc)
     endif()
