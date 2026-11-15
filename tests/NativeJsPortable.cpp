@@ -41,10 +41,10 @@ int main() {
              "document.getElementById('result').textContent=String(obj.a);","42");
         Test("finally","function f(){try{return 42;} finally{document.title='done';}}"
              "document.getElementById('result').textContent=String(f());","42");
-        Test("json","const value=JSON.parse('{\\\"count\\\":42}');"
+        Test("json","const value=JSON.parse('{\"count\":42}');"
              "document.getElementById('result').textContent="
              "String(value.count)+'/'+JSON.stringify({ok:true});",
-             "42/{\\\"ok\\\":true}");
+             "42/{\"ok\":true}");
         Test("conditional","const a=false?'bad':'ok';"
              "document.getElementById('result').textContent=a;","ok");
         auto tokens=ac::script::js::Tokenize("const text='Hola\\u00f1';");
