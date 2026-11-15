@@ -176,6 +176,31 @@ bool ExecuteStatement(Document& d, std::string_view statement) {
     else return false;
     return true;
 }
+// Small navigation subset, deliberately not advertised as ECMAScript support.
+bool NavigationStatement(std::string_view statement, std::string& location) {
+    size_t i = 0;
+    if (Consume(statement,i,"window.")) {
+        // window.location...
+    } else if (Consume(statement,i,"document.")) {
+        // document.location...
+    }
+    if (!Consume(statement,i,"location")) return false;
+    bool functionCall = false;
+    if (Consume(statement,i,".replace") || Consume(statement,i,".assign")) {
+        if (!Consume(statement,i,"(")) return false;
+        functionCall = true;
+    } else {
+        (void)Consume(statement,i,".href");
+        if (!Consume(statement,i,"=")) return false;
+    }
+    std::string raw;
+    if (!LiteralExpression(statement,i,raw)) return false;
+    if (functionCall && !Consume(statement,i,")")) return false;
+    Skip(statement,i);
+    if (i != statement.size() || raw.empty()) return false;
+    location = std::move(raw);
+    return true;
+}
 } // namespace
 Execution Execute(html::Document& d, std::wstring_view baseUrl,
                   const std::unordered_map<std::string,std::string>& external) {
@@ -191,6 +216,16 @@ Execution Execute(html::Document& d, std::wstring_view baseUrl,
             if (ExecuteStatement(d,statement)) {
                 handled=true;
                 ++out.operations;
+            } else {
+                std::string target;
+                if (NavigationStatement(statement,target)) {
+                    const auto resolved = ac::url::Resolve(baseUrl,ac::url::ToWide(target));
+                    if (ac::url::IsWeb(resolved)) {
+                        out.navigation = resolved;
+                        handled = true;
+                        ++out.operations;
+                    }
+                }
             }
         }
         if (!handled) ++out.unsupported;
