@@ -36,7 +36,7 @@ add_executable(AnotherChance WIN32
     src/layout/Layout.cpp
     src/forms/NativeFormControls.cpp
     src/window/BrowserWindow.cpp
-    src/window/Chrome.cpp
+    src/window/WindowFrame.cpp
 )
 
 target_compile_features(AnotherChance PRIVATE cxx_std_20)
