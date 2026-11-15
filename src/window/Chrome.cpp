@@ -59,11 +59,13 @@ void Label(Graphics& g,const std::wstring& value,RectF rect,
     g.DrawString(value.c_str(),-1,&font,rect,&fmt,&brush);
 }
 void ChevronArrow(Graphics& g,int x,int y,bool backward,const Color& c) {
-    const float direction=backward?-1.0f:1.0f;
-    const float tip=x+direction*6.0f;
-    Line(g,c,1.7f,PointF(x-direction*6.0f,y),PointF(tip,y));
-    Line(g,c,1.7f,PointF(tip,y),PointF(x,y-6.0f));
-    Line(g,c,1.7f,PointF(tip,y),PointF(x,y+6.0f));
+    const REAL centerX=static_cast<REAL>(x);
+    const REAL centerY=static_cast<REAL>(y);
+    const REAL direction=backward?-1.0f:1.0f;
+    const REAL tip=centerX+direction*6.0f;
+    Line(g,c,1.7f,PointF(centerX-direction*6.0f,centerY),PointF(tip,centerY));
+    Line(g,c,1.7f,PointF(tip,centerY),PointF(centerX,centerY-6.0f));
+    Line(g,c,1.7f,PointF(tip,centerY),PointF(centerX,centerY+6.0f));
 }
 void Refresh(Graphics& g,int x,int y) {
     Pen pen(kInk,1.6f);
