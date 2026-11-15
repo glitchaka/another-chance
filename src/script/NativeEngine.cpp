@@ -633,6 +633,38 @@ class Interpreter {
         if(s=="*" || s=="/" || s=="%") return 7;
         return -1;
     }
+    // Skips unevaluated branches of the conditional operator without running
+    // their side effects. Nested delimiters and nested ternaries are handled.
+    void SkipConditionalBranch(bool untilColon) {
+        unsigned parens=0,brackets=0,braces=0,ternaries=0;
+        while(Peek().kind!=TokenKind::End) {
+            const auto& token=Peek().text;
+            if(!parens && !brackets && !braces) {
+                if(token=="?") ++ternaries;
+                else if(token==":") {
+                    if(ternaries) --ternaries;
+                    else if(untilColon) return;
+                }
+                if(!untilColon && !ternaries &&
+                   (token==";" || token=="," || token==")" ||
+                    token=="]" || token=="}" || token==":")) return;
+            }
+            if(token=="(") ++parens;
+            else if(token=="[") ++brackets;
+            else if(token=="{") ++braces;
+            else if(token==")") {
+                if(!parens) return;
+                --parens;
+            } else if(token=="]") {
+                if(!brackets) return;
+                --brackets;
+            } else if(token=="}") {
+                if(!braces) return;
+                --braces;
+            }
+            ++pos_;
+        }
+    }
     Result Expression(int min=1) {
         auto left=Postfix();
         while(true) {
@@ -681,6 +713,19 @@ class Interpreter {
             else if(op=="||") left.value=a.Truth()?a:b;
             else if(op=="??") left.value=a.kind==Value::Kind::Undefined?b:a;
             left.path.clear();
+        }
+        if(min<=2 && Match("?")) {
+            const bool condition=left.value.Truth();
+            if(condition) {
+                auto selected=Expression();
+                Expect(":");
+                SkipConditionalBranch(false);
+                return {selected.value,{}};
+            }
+            SkipConditionalBranch(true);
+            Expect(":");
+            auto selected=Expression(2);
+            return {selected.value,{}};
         }
         return left;
     }
