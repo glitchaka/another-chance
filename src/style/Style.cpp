@@ -509,17 +509,32 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
         [](const MatchedRule& a, const MatchedRule& b) {
             return a.score < b.score;
         });
-    for (const auto& match : matched) {
-        for (const auto& [key,value] : match.rule->declarations) {
-            Apply(result, key, value);
+    // Apply normal declarations first, then !important declarations using
+    // the same origin/specificity ordering. Inline !important wins at the end.
+    // This prevents ordinary inline styles from overriding author important CSS.
+    std::vector<Declaration> important;
+    auto applyDeclaration = [&](const Declaration& declaration) {
+        auto value = Trim(declaration.second);
+        constexpr std::string_view suffix = "!important";
+        if (value.size() >= suffix.size() &&
+            value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0) {
+            value = Trim(std::string_view(value).substr(0, value.size() - suffix.size()));
+            if (!value.empty()) important.emplace_back(declaration.first, std::move(value));
+        } else {
+            Apply(result, declaration.first, value);
         }
+    };
+    for (const auto& match : matched) {
+        for (const auto& declaration : match.rule->declarations)
+            applyDeclaration(declaration);
     }
     const auto inlineCss = node.Attribute("style");
     if (!inlineCss.empty()) {
-        for (const auto& [key,value] : ParseDeclarations(inlineCss)) {
-            Apply(result, key, value);
-        }
+        for (const auto& declaration : ParseDeclarations(inlineCss))
+            applyDeclaration(declaration);
     }
+    for (const auto& declaration : important)
+        Apply(result, declaration.first, declaration.second);
     // Boolean HTML "hidden" is a presence attribute. Hidden inputs must
     // not leak values or tokens into rendered text even if CSS overrides display.
     if (node.attributes.contains("hidden") ||
