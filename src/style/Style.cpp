@@ -221,10 +221,39 @@ void Sheet::Parse(std::string_view css, int viewportWidth) {
     visit(0, cleaned.size());
 }
 
+namespace {
+// Resolve limited var(--custom-property, fallback) references with bounded
+// expansion. Nested functions remain unsupported until CSS tokenizer upgrade.
+std::string ExpandVariables(std::string value,
+    const std::unordered_map<std::string, std::string>& variables) {
+    for (unsigned step = 0; step < 8; ++step) {
+        const auto begin = value.find("var(");
+        if (begin == std::string::npos) break;
+        const auto close = value.find(')', begin + 4);
+        if (close == std::string::npos) break;
+        auto inside = value.substr(begin + 4, close - begin - 4);
+        const auto comma = inside.find(',');
+        const auto name = Trim(std::string_view(inside).substr(0, comma));
+        const auto found = variables.find(name);
+        const std::string replacement =
+            found != variables.end() ? found->second :
+            comma != std::string::npos ? Trim(std::string_view(inside).substr(comma + 1)) : "";
+        value.replace(begin, close - begin + 1, replacement);
+        if (value.size() > 4096) return {};
+    }
+    return value;
+}
+} // namespace
+
 void Sheet::Apply(Computed& style, std::string_view rawKey,
                   std::string_view rawValue) {
     const std::string key = Lower(Trim(rawKey));
-    const std::string value = Lower(Trim(rawValue));
+    const std::string input = Lower(Trim(rawValue));
+    if (key.starts_with("--")) {
+        if (input.size() <= 4096) style.variables[key] = input;
+        return;
+    }
+    const std::string value = ExpandVariables(input,style.variables);
     if (key == "color") style.color = ParseColor(value, style.color);
     else if (key == "background" || key == "background-color") {
         if (value == "transparent") style.background = CLR_INVALID;
@@ -344,6 +373,11 @@ namespace {
 // descendant and direct-child combinators (not pseudoclasses).
 bool MatchesSimple(const html::Node& node, std::string_view selector) {
     if (node.type != html::Node::Type::Element) return false;
+    if (selector == ":root") return node.tag == "html";
+    if (selector.ends_with(":root")) {
+        const auto prefix = selector.substr(0, selector.size() - 5);
+        return node.tag == "html" && (prefix == "html" || prefix == "*");
+    }
     if (selector.empty() || selector.find_first_of("[:+~") != std::string_view::npos)
         return false;
     size_t pos = 0;
@@ -524,11 +558,20 @@ Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
             Apply(result, declaration.first, value);
         }
     };
+    const auto inlineCss = node.Attribute("style");
+    // Custom properties inherit, and declarations may refer to variables
+    // declared later in the same stylesheet. Resolve them before other styles.
+    for (const auto& match : matched)
+        for (const auto& [key, value] : match.rule->declarations)
+            if (key.starts_with("--")) Apply(result, key, value);
+    if (!inlineCss.empty())
+        for (const auto& [key, value] : ParseDeclarations(inlineCss))
+            if (key.starts_with("--")) Apply(result, key, value);
+
     for (const auto& match : matched) {
         for (const auto& declaration : match.rule->declarations)
             applyDeclaration(declaration);
     }
-    const auto inlineCss = node.Attribute("style");
     if (!inlineCss.empty()) {
         for (const auto& declaration : ParseDeclarations(inlineCss))
             applyDeclaration(declaration);
