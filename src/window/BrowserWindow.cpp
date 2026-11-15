@@ -110,7 +110,7 @@ void CollectScriptSources(const ac::html::Node& node, const std::wstring& base,
                           std::vector<std::wstring>& sources,
                           std::unordered_set<std::wstring>& known) {
     // Restricted interpreter: cap external downloads to prevent unbounded waits.
-    if (sources.size() >= 16) return;
+    if (sources.size() >= 64) return;
     if (node.tag == "script") {
         const auto src = node.Attribute("src");
         if (!src.empty()) {
