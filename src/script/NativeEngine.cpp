@@ -51,6 +51,9 @@ struct Value {
         if(kind==Kind::Text) return text;
         if(kind==Kind::Boolean) return number?"true":"false";
         if(kind==Kind::Number) {
+            if(std::isnan(number)) return "NaN";
+            if(std::isinf(number)) return std::signbit(number)?"-Infinity":"Infinity";
+            if(number==0) return "0";
             std::ostringstream s;s<<std::setprecision(15)<<number;return s.str();
         }
         if(kind==Kind::Array && array) {
