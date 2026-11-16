@@ -113,6 +113,13 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("regexp-constructor",
+             "const expression=new RegExp('[0-9]+');"
+             "const matched='Answer 42'.match(expression);"
+             "const changed='Answer 42'.replace(expression,'ok');"
+             "document.getElementById('result').textContent="
+             "matched[0]+'/'+changed+'/'+String('a42'.search(expression));",
+             "42/Answer ok/1");
         Test("regexp-literals",
              "const pattern=/[{}]+/g;"
              "const check=pattern.test('{{}') && !pattern.test('plain');"
