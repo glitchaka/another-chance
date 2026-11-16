@@ -267,12 +267,15 @@ public:
         GetWindowTextW(window_, title, 512);
         return std::wstring_view(title).find(expected) != std::wstring_view::npos;
     }
-    bool StatusContains(std::wstring_view text) const {
+    std::wstring StatusText() const {
         HWND label = FindWindowExW(window_, nullptr, L"Static", nullptr);
-        if (!label) return false;
+        if (!label) return {};
         wchar_t status[1024]{};
         GetWindowTextW(label, status, 1024);
-        return std::wstring_view(status).find(text) != std::wstring_view::npos;
+        return status;
+    }
+    bool StatusContains(std::wstring_view text) const {
+        return StatusText().find(text) != std::wstring::npos;
     }
     bool HasHttp200() const {
         HWND label = FindWindowExW(window_, nullptr, L"Static", nullptr);
@@ -468,7 +471,8 @@ int wmain(int argc, wchar_t** argv) {
                            << L" completed=" << completed
                            << L" HTTP200=" << browser.HasHttp200()
                            << L" visible=" << visible
-                           << L" pageInput=" << interactive << L"\n";
+                           << L" pageInput=" << interactive
+                           << L" status=" << browser.StatusText() << L"\n";
                 if (!success) allPassed = false;
             }
             Check(allPassed,
