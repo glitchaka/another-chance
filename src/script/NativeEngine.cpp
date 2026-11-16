@@ -1861,7 +1861,33 @@ public:
             while(Peek().kind!=TokenKind::End && stats_.navigation.empty()) Statement();
             return true;
         } catch(const std::exception& error) {
-            if(stats_.lastError.empty()) stats_.lastError=error.what();
+            if(stats_.lastError.empty()) {
+                std::string diagnostic=error.what();
+                // Source positions remain attached to tokens inside nested
+                // functions, including scripts with many minified statements.
+                // Emit a narrow, printable context rather than the page body.
+                if(!tokens_.empty()) {
+                    const size_t index=std::min(pos_,tokens_.size()-1);
+                    const auto offset=tokens_[index].offset;
+                    diagnostic+=" | token "+std::to_string(index)+
+                                " byte "+std::to_string(offset)+" | ";
+                    const size_t first=index>4?index-4:0;
+                    const size_t last=std::min(tokens_.size(),index+5);
+                    for(size_t cursor=first;cursor<last;++cursor) {
+                        if(cursor==index) diagnostic+=" [";
+                        const auto& value=tokens_[cursor].text;
+                        const size_t length=std::min(value.size(),static_cast<size_t>(24));
+                        for(size_t i=0;i<length;++i) {
+                            const unsigned char ch=static_cast<unsigned char>(value[i]);
+                            diagnostic+=ch>=32 && ch<127?static_cast<char>(ch):'?';
+                        }
+                        if(value.size()>length) diagnostic+="...";
+                        if(cursor==index) diagnostic+="]";
+                        diagnostic+=' ';
+                    }
+                }
+                stats_.lastError=std::move(diagnostic);
+            }
             return false;
         } catch(const ThrowSignal& error) {
             if(stats_.lastError.empty())
