@@ -38,6 +38,7 @@ jobs:
             build/AnotherChance-live-example.bmp
             build/AnotherChance-live-cern.bmp
             build/AnotherChance-live-example.html
+            build/AnotherChance-live-example-script.js
             build/AnotherChance-live-cern.html
             build/AnotherChance-live-google.bmp
             build/AnotherChance-live-archive.bmp
