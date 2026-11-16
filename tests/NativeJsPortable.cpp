@@ -113,6 +113,11 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("regexp-literals",
+             "const pattern=/[{}]+/g;"
+             "const check=pattern.test('{{}') && !pattern.test('plain');"
+             "document.getElementById('result').textContent=String(check);",
+             "true");
         Test("switch-fallthrough",
              "let total=0;const key=2;"
              "switch(key){case 1: total=100;break;"
@@ -175,6 +180,15 @@ int main() {
              "document.getElementById('result').textContent=String(twice(21));","42");
         Test("conditional","const a=false?'bad':'ok';"
              "document.getElementById('result').textContent=a;","ok");
+        const auto regexTokens=ac::script::js::Tokenize("function f(){return /[{}]/.test('{');}");
+        unsigned regexCount=0,openBraces=0,closeBraces=0;
+        for(const auto& token:regexTokens) {
+            if(token.kind==ac::script::js::TokenKind::RegExp) ++regexCount;
+            if(token.kind==ac::script::js::TokenKind::Symbol && token.text=="{") ++openBraces;
+            if(token.kind==ac::script::js::TokenKind::Symbol && token.text=="}") ++closeBraces;
+        }
+        Check(regexCount==1 && openBraces==1 && closeBraces==1,
+              "regular expression braces must not tokenize as JavaScript blocks");
         auto tokens=ac::script::js::Tokenize("const text='Hola\\u00f1';");
         bool unicode=false;
         for(const auto& token:tokens)
