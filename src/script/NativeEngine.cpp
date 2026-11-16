@@ -78,9 +78,19 @@ void ReadText(const Node& node,std::string& output) {
     if(node.type==Node::Type::Text) output+=node.text;
     for(auto& ch:node.children) ReadText(*ch,output);
 }
-void SetNode(Document& doc,Node& node,const std::string& value,bool html,bool append=false) {
+void SetNode(Document& doc,Node& node,const std::string& value,bool html,
+             bool append=false,
+             std::vector<std::unique_ptr<Node>>* retained=nullptr) {
     if(value.size()>1024*1024) throw std::runtime_error("DOM write too large");
-    if(!append) node.children.clear();
+    if(!append) {
+        if(retained) {
+            for(auto& child:node.children) {
+                child->parent=nullptr;
+                retained->push_back(std::move(child));
+            }
+        }
+        node.children.clear();
+    }
     if(html) {
         auto fragment=html::Parse(value);
         doc.embeddedCss+="\n"+fragment.embeddedCss;
@@ -287,7 +297,7 @@ class Interpreter {
                 return;
             }
             if(member=="innerHTML" || member=="textContent" || member=="innerText") {
-                SetNode(doc_,*target.propertyNode,value.String(),member=="innerHTML");
+                SetNode(doc_,*target.propertyNode,value.String(),member=="innerHTML",false,&detached_);
                 ++stats_.operations;
             } else if(member=="value" || member=="id" || member=="className") {
                 target.propertyNode->attributes[member=="className"?"class":member]=value.String();
@@ -320,7 +330,7 @@ class Interpreter {
             node=FindSelector(doc_.root.get(),owner.substr(9));
         if(!node) return;
         if(member=="innerHTML" || member=="textContent" || member=="innerText") {
-            SetNode(doc_,*node,value.String(),member=="innerHTML");++stats_.operations;
+            SetNode(doc_,*node,value.String(),member=="innerHTML",false,&detached_);++stats_.operations;
         } else if(member=="value" || member=="id" || member=="className") {
             node->attributes[member=="className"?"class":member]=value.String();
             ++stats_.operations;
@@ -1323,7 +1333,7 @@ class Interpreter {
                     } else if(result.value.kind==Value::Kind::Document && member=="write") {
                         auto* body=FindTag(doc_.root.get(),"body");
                         if(!body) body=doc_.root.get();
-                        for(auto& arg:args) SetNode(doc_,*body,arg.String(),true,true);
+                        for(auto& arg:args) SetNode(doc_,*body,arg.String(),true,true,&detached_);
                         ++stats_.operations;result={};
                     } else if(result.value.kind==Value::Kind::Element &&
                               result.value.element && member=="setAttribute") {
