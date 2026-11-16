@@ -140,6 +140,19 @@ int main() {
              "root.removeChild(old);"
              "root.textContent='reused';",
              "reused");
+        Test("adjacent-html",
+             "const root=document.getElementById('result');"
+             "root.insertAdjacentHTML('afterbegin','<em>first</em>');"
+             "root.insertAdjacentHTML('beforeend','<strong>last</strong>');"
+             "const first=document.querySelector('em');"
+             "first.insertAdjacentText('afterend','-middle-');",
+             "first-middle-last");
+        Test("adjacent-beforebegin",
+             "const root=document.getElementById('result');"
+             "root.innerHTML='<em>end</em>';"
+             "document.querySelector('em').insertAdjacentHTML('beforebegin','<b>start</b>');"
+             "root.textContent='start end';",
+             "start end");
         Test("innerhtml-serialization",
              "const element=document.getElementById('result');"
              "element.innerHTML='<strong>Markup</strong>';"
