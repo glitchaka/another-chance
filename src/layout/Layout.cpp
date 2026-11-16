@@ -332,17 +332,28 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
                 }
                 children.push_back(child.get());
             }
-            const int columns = computed.layoutMode == style::LayoutMode::Grid ?
-                computed.gridColumns :
-                std::max(1, static_cast<int>(children.size()));
-            const int cols = std::clamp(columns, 1, 12);
             const int gap = std::max(0, computed.gapPixels);
             const int parentLeft = left_;
             const int parentRight = right_;
+            const int availableWidth = std::max(1, parentRight - parentLeft);
+            // A flex row is not a CSS grid with one track per DOM child.
+            // Equal-splitting a busy navigation strip into 12 tracks made
+            // entire words wrap into one-character vertical columns.
+            // Until intrinsic flex sizing is implemented, enforce a readable
+            // minimum track and wrap surplus children to another row.
+            constexpr int kReadableTrack = 120;
+            const int maximumColumns = std::max(1,
+                (availableWidth + gap) / (kReadableTrack + gap));
+            const int requestedColumns =
+                computed.layoutMode == style::LayoutMode::Grid
+                    ? computed.gridColumns
+                    : static_cast<int>(std::min(children.size(),size_t{12}));
+            const int cols = std::clamp(requestedColumns,1,
+                std::min(12,maximumColumns));
             const int rowStart = y_;
             int rowBottom = rowStart;
             const int trackWidth = std::max(1,
-                (parentRight - parentLeft - gap * (cols - 1)) / cols);
+                (availableWidth - gap * (cols - 1)) / cols);
             for (size_t i = 0; i < children.size(); ++i) {
                 const int column = static_cast<int>(i % static_cast<size_t>(cols));
                 if (column == 0 && i != 0) {
