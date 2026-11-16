@@ -113,6 +113,12 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("do-while",
+             "let count=0;let total=0;"
+             "do{count++;if(count===2)continue;"
+             "if(count===5)break;total+=count;}while(count<8);"
+             "document.getElementById('result').textContent=String(total);",
+             "8");
         Test("dom-node-detach",
              "const root=document.getElementById('result');"
              "const text=document.createTextNode('working');"
