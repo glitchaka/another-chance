@@ -217,6 +217,13 @@ class Interpreter {
             }
             return {};
         }
+        if(base.kind==Value::Kind::RegExp) {
+            if(name=="source") {
+                const auto lastSlash=base.text.rfind('/');
+                return Value::Str(base.text.substr(1,lastSlash-1));
+            }
+            if(name=="global") return Value::Bool(base.regexpGlobal);
+        }
         if(base.kind==Value::Kind::Text && name=="length") return Value::Num(base.text.size());
         if(base.kind==Value::Kind::Array && base.array && name=="length")
             return Value::Num(base.array->size());
@@ -466,6 +473,19 @@ class Interpreter {
         if(Match("++")) {
             auto r=Postfix();auto v=Value::Num(r.value.Number()+1);Write(r,v);return {v,{}};
         }
+        if(Peek().kind==TokenKind::RegExp) {
+            const auto expression=tokens_[pos_++].text;
+            const auto lastSlash=expression.rfind('/');
+            if(lastSlash==std::string::npos || lastSlash==0)
+                throw std::runtime_error("Invalid regexp literal");
+            try {
+                return {Value::RegExpValue(
+                    expression.substr(1,lastSlash-1),
+                    expression.substr(lastSlash+1)),{}};
+            } catch(const std::regex_error&) {
+                throw std::runtime_error("Unsupported regexp literal");
+            }
+        }
         if(Peek().kind==TokenKind::Number) return {Value::Num(tokens_[pos_++].number),{}};
         if(Peek().kind==TokenKind::String) return {Value::Str(tokens_[pos_++].text),{}};
         if(Peek().kind==TokenKind::Identifier) {
@@ -703,7 +723,24 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Function &&
+                    if(result.value.kind==Value::Kind::RegExp &&
+                       (member=="test" || member=="exec")) {
+                        if(!result.value.regexp)
+                            throw std::runtime_error("Uncompiled regexp");
+                        const std::string input=args.empty()?"undefined":args[0].String();
+                        std::smatch match;
+                        const bool found=std::regex_search(input,match,*result.value.regexp);
+                        if(member=="test") {
+                            result={Value::Bool(found),{}};
+                        } else if(!found) {
+                            result={Value::Special(Value::Kind::Null),{}};
+                        } else {
+                            std::vector<Value> captures;
+                            for(const auto& item:match)
+                                captures.push_back(Value::Str(item.str()));
+                            result={Value::ArrayValue(std::move(captures)),{}};
+                        }
+                    } else if(result.value.kind==Value::Kind::Function &&
                        result.value.text=="@builtin:Object" &&
                        (member=="create" || member=="assign" ||
                         member=="keys" || member=="values" ||
