@@ -79,6 +79,14 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("optional-chaining",
+             "let counter=0;function side(){counter++;return 1;}"
+             "const unavailable=null;const record={value:42};"
+             "const a=unavailable?.missing(side());"
+             "const b=record?.value;"
+             "document.getElementById('result').textContent="
+             "String(a)+'/'+String(b)+'/'+String(counter);",
+             "undefined/42/0");
         Test("array-methods",
              "const list=[3,6,9];"
              "const more=list.concat([12,15]);"
