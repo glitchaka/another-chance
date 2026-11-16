@@ -113,6 +113,11 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("for-in",
+             "const source={answer:42};let result='';"
+             "for(const key in source){result=String(source[key]);}"
+             "document.getElementById('result').textContent=result;",
+             "42");
         Test("do-while",
              "let count=0;let total=0;"
              "do{count++;if(count===2)continue;"
