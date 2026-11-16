@@ -418,6 +418,290 @@ bool MatchesSimple(const html::Node& node, std::string_view selector,
                     if (token == value) { found = true; break; }
                 if (!found) return false;
             }
+        } else if (mark == '[') {
+            const size_t end = selector.find(']', pos);
+            if (end == std::string_view::npos) return false;
+            const std::string expression = Trim(selector.substr(pos, end - pos));
+            pos = end + 1;
+            size_t op = expression.find_first_of("~|^$*=");
+            const std::string key = Trim(std::string_view(expression).substr(0,op));
+            if (key.empty()) return false;
+            const auto found = node.attributes.find(key);
+            if (found == node.attributes.end()) return false;
+            if (op == std::string::npos) continue;
+            const char operation = expression[op];
+            if (operation != '=' && (op + 1 >= expression.size() ||
+                                      expression[op + 1] != '=')) return false;
+            const size_t valueStart = op + (operation == '=' ? 1 : 2);
+            std::string expected = Trim(std::string_view(expression).substr(valueStart));
+            if (expected.size() >= 2 &&
+                ((expected.front() == '"' && expected.back() == '"') ||
+                 (expected.front() == '\'' && expected.back() == '\'')))
+                expected = expected.substr(1,expected.size()-2);
+            const std::string& actual = found->second;
+            bool matched = false;
+            switch (operation) {
+                case '=': matched = actual == expected; break;
+                case '~': {
+                    std::istringstream tokens(actual);
+                    std::string token;
+                    while (tokens >> token)
+                        if (token == expected) { matched = true; break; }
+                    break;
+                }
+                case '|': matched = actual == expected ||
+                    (actual.size() > expected.size() &&
+                     actual.compare(0,expected.size(),expected) == 0 &&
+                     actual[expected.size()] == '-'); break;
+                case '^': matched = actual.starts_with(expected); break;
+                case '
+            const size_t nameBegin = pos;
+            while (pos < selector.size() &&
+                   (std::isalnum(static_cast<unsigned char>(selector[pos])) ||
+                    selector[pos] == '-')) ++pos;
+            const auto name = selector.substr(nameBegin, pos - nameBegin);
+            if (name == "root") {
+                if (node.tag != "html") return false;
+            } else if (name == "first-child" || name == "last-child" ||
+                       name == "only-child" || name == "empty") {
+                if (name == "empty") {
+                    for (const auto& child : node.children)
+                        if (child->type == html::Node::Type::Element ||
+                            (child->type == html::Node::Type::Text &&
+                             !child->text.empty())) return false;
+                } else {
+                    if (!node.parent) return false;
+                    const html::Node* first = nullptr;
+                    const html::Node* last = nullptr;
+                    for (const auto& child : node.parent->children) {
+                        if (child->type != html::Node::Type::Element) continue;
+                        if (!first) first = child.get();
+                        last = child.get();
+                    }
+                    if (name == "first-child" && first != &node) return false;
+                    if (name == "last-child" && last != &node) return false;
+                    if (name == "only-child" && (first != &node || last != &node))
+                        return false;
+                }
+            } else if (name == "is" || name == "where" || name == "not") {
+                if (pos >= selector.size() || selector[pos] != '(') return false;
+                const size_t open = ++pos;
+                unsigned depth = 1;
+                while (pos < selector.size() && depth) {
+                    if (selector[pos] == '(') ++depth;
+                    else if (selector[pos] == ')') --depth;
+                    if (depth) ++pos;
+                }
+                if (depth) return false;
+                const auto args = selector.substr(open, pos - open);
+                ++pos;
+                bool anyMatch = false;
+                size_t begin = 0;
+                unsigned argDepth = 0;
+                for (size_t i = 0; i <= args.size(); ++i) {
+                    if (i < args.size() && args[i] == '(') ++argDepth;
+                    else if (i < args.size() && args[i] == ')' && argDepth)
+                        --argDepth;
+                    if (i != args.size() && (args[i] != ',' || argDepth)) continue;
+                    const auto part = Trim(args.substr(begin, i - begin));
+                    if (!part.empty() && MatchesSimple(node, part, recursion + 1))
+                        anyMatch = true;
+                    begin = i + 1;
+                }
+                if ((name == "not" && anyMatch) ||
+                    (name != "not" && !anyMatch)) return false;
+            } else return false;
+        } else return false;
+    }
+    return true;
+}
+
+struct SelectorParts {
+    std::vector<std::string> simple;
+    std::vector<char> relation;
+};
+SelectorParts SplitSelector(std::string_view value) {
+    SelectorParts parts;
+    size_t i = 0;
+    char relation = ' ';
+    while (i < value.size()) {
+        if (std::isspace(static_cast<unsigned char>(value[i]))) {
+            ++i; continue;
+        }
+        if (value[i] == '>') {
+            relation = '>';
+            ++i; continue;
+        }
+        const size_t start = i;
+        unsigned depth = 0;
+        while (i < value.size()) {
+            if (value[i] == '(' || value[i] == '[') ++depth;
+            else if ((value[i] == ')' || value[i] == ']') && depth) --depth;
+            if (!depth && (value[i] == '>' ||
+                std::isspace(static_cast<unsigned char>(value[i])))) break;
+            ++i;
+        }
+        if (start == i) { ++i; continue; }
+        if (!parts.simple.empty()) parts.relation.push_back(relation);
+        parts.simple.emplace_back(value.substr(start, i - start));
+        relation = ' ';
+    }
+    return parts;
+}
+int Specificity(std::string_view selector) {
+    const auto parts = SplitSelector(selector);
+    int score = 0;
+    for (const auto& item : parts.simple) {
+        if (!item.empty() && item.front() != '*' &&
+            item.front() != '.' && item.front() != '#') ++score;
+        for (char c : item) {
+            if (c == '.') score += 10;
+            if (c == '#') score += 100;
+        }
+    }
+    return score;
+}
+} // namespace
+
+bool Sheet::Matches(const html::Node& node, std::string_view fullSelector) {
+    const auto selector = SplitSelector(fullSelector);
+    if (selector.simple.empty()) return false;
+    const html::Node* current = &node;
+    size_t i = selector.simple.size() - 1;
+    if (!MatchesSimple(*current, selector.simple[i])) return false;
+    while (i > 0) {
+        const char relation = selector.relation[i - 1];
+        current = current->parent;
+        if (relation == '>') {
+            if (!current || !MatchesSimple(*current, selector.simple[i - 1]))
+                return false;
+        } else {
+            while (current && !MatchesSimple(*current, selector.simple[i - 1]))
+                current = current->parent;
+            if (!current) return false;
+        }
+        --i;
+    }
+    return true;
+}
+
+Computed Sheet::Compute(const html::Node& node, const Computed& parent) const {
+    Computed result = parent;
+    result.block = false;
+    // This field is per-element: a hidden ancestor is already pruned in
+    // PageLayout::Walk, so carrying it into a descendant is incorrect.
+    result.hidden = false;
+    result.marginTop = 0;
+    result.marginBottom = 0;
+    result.marginLeft = 0;
+    result.marginRight = 0;
+    result.paddingTop = result.paddingRight = 0;
+    result.paddingBottom = result.paddingLeft = 0;
+    result.widthPixels = -1;
+    result.widthPercent = -1;
+    result.maxWidthPixels = -1;
+    result.minHeightPixels = 0;
+    result.gapPixels = 0;
+    result.gridColumns = 2;
+    result.layoutMode = LayoutMode::Flow;
+    result.background = CLR_INVALID;
+    if (node.type != html::Node::Type::Element) return result;
+    const auto& tag = node.tag;
+    result.block = IsBlock(tag);
+    if (tag == "document") result.block = false;
+    if (tag == "center") result.textAlign = TextAlign::Center;
+    if (tag == "div" || tag == "p" || tag == "h1" || tag == "h2" || tag == "h3") {
+        const auto htmlAlign = Lower(node.Attribute("align"));
+        if (htmlAlign == "center") result.textAlign = TextAlign::Center;
+        else if (htmlAlign == "right") result.textAlign = TextAlign::Right;
+        else if (htmlAlign == "left") result.textAlign = TextAlign::Left;
+    }
+    if (tag == "noscript" && scriptingEnabled_) result.hidden = true;
+    if (tag == "head" || tag == "title" || tag == "script" ||
+        tag == "style" || tag == "meta" || tag == "link" ||
+        tag == "svg" || tag == "canvas" ||
+        tag == "template" || tag == "base" || tag == "source")
+        result.hidden = true;
+    if (tag == "a") {
+        result.color = RGB(20, 87, 180);
+        result.underline = true;
+    }
+    if (tag == "b" || tag == "strong" || tag == "th" || tag == "dt") result.bold = true;
+    if (tag == "em" || tag == "i" || tag == "cite") result.italic = true;
+    if (tag == "h1") { result.fontSize = 32; result.bold = true; result.marginTop = 14; result.marginBottom = 12; }
+    else if (tag == "h2") { result.fontSize = 27; result.bold = true; result.marginTop = 12; result.marginBottom = 9; }
+    else if (tag == "h3") { result.fontSize = 22; result.bold = true; result.marginTop = 10; result.marginBottom = 8; }
+    else if (tag == "h4" || tag == "h5" || tag == "h6") {
+        result.fontSize = 18; result.bold = true; result.marginTop = 8; result.marginBottom = 6;
+    } else if (tag == "p") { result.marginTop = 5; result.marginBottom = 11; }
+    else if (tag == "li") { result.marginTop = 2; result.marginBottom = 3; }
+    else if (tag == "ul" || tag == "ol") { result.marginTop = 7; result.marginBottom = 9; }
+    else if (tag == "blockquote") { result.italic = true; result.marginTop = 10; result.marginBottom = 10; }
+    else if (tag == "small") result.fontSize = std::max(9, result.fontSize - 2);
+    else if (tag == "code" || tag == "pre") result.background = RGB(246,247,249);
+
+    // Apply by CSS specificity first, preserving source order on ties.
+    // This remains a subset: no !important, @media, pseudo-classes, or
+    // full CSS cascade layers.
+    struct MatchedRule { int score; size_t order; const Rule* rule; };
+    std::vector<MatchedRule> matched;
+    for (size_t i = 0; i < rules_.size(); ++i) {
+        if (Matches(node, rules_[i].selector)) {
+            matched.push_back({Specificity(rules_[i].selector), i, &rules_[i]});
+        }
+    }
+    std::stable_sort(matched.begin(), matched.end(),
+        [](const MatchedRule& a, const MatchedRule& b) {
+            return a.score < b.score;
+        });
+    // Apply normal declarations first, then !important declarations using
+    // the same origin/specificity ordering. Inline !important wins at the end.
+    // This prevents ordinary inline styles from overriding author important CSS.
+    std::vector<Declaration> important;
+    auto applyDeclaration = [&](const Declaration& declaration) {
+        auto value = Trim(declaration.second);
+        constexpr std::string_view suffix = "!important";
+        if (value.size() >= suffix.size() &&
+            value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0) {
+            value = Trim(std::string_view(value).substr(0, value.size() - suffix.size()));
+            if (!value.empty()) important.emplace_back(declaration.first, std::move(value));
+        } else {
+            Apply(result, declaration.first, value);
+        }
+    };
+    const auto inlineCss = node.Attribute("style");
+    // Custom properties inherit, and declarations may refer to variables
+    // declared later in the same stylesheet. Resolve them before other styles.
+    for (const auto& match : matched)
+        for (const auto& [key, value] : match.rule->declarations)
+            if (key.starts_with("--")) Apply(result, key, value);
+    if (!inlineCss.empty())
+        for (const auto& [key, value] : ParseDeclarations(inlineCss))
+            if (key.starts_with("--")) Apply(result, key, value);
+
+    for (const auto& match : matched) {
+        for (const auto& declaration : match.rule->declarations)
+            applyDeclaration(declaration);
+    }
+    if (!inlineCss.empty()) {
+        for (const auto& declaration : ParseDeclarations(inlineCss))
+            applyDeclaration(declaration);
+    }
+    for (const auto& declaration : important)
+        Apply(result, declaration.first, declaration.second);
+    // Boolean HTML "hidden" is a presence attribute. Hidden inputs must
+    // not leak values or tokens into rendered text even if CSS overrides display.
+    if (node.attributes.contains("hidden") ||
+        (tag == "input" && Lower(node.Attribute("type")) == "hidden")) {
+        result.hidden = true;
+    }
+    return result;
+}
+} // namespace ac::style
+: matched = actual.ends_with(expected); break;
+                case '*': matched = actual.find(expected) != std::string::npos; break;
+            }
+            if (!matched) return false;
         } else if (mark == ':') {
             const size_t nameBegin = pos;
             while (pos < selector.size() &&
