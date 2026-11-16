@@ -14,6 +14,10 @@ const ac::html::Node* Find(const ac::html::Node* parent,std::string_view tag) {
         if(auto* match=Find(child.get(),tag)) return match;
     return nullptr;
 }
+void GatherText(const ac::html::Node& node,std::string& output) {
+    if(node.type==ac::html::Node::Type::Text) output+=node.text;
+    for(const auto& child:node.children) GatherText(*child,output);
+}
 void Check(bool condition,const char* message) {
     if(!condition) throw std::runtime_error(message);
 }
@@ -27,8 +31,10 @@ void Test(const char* name,std::string_view source,std::string_view expected) {
     }
     const auto* p=Find(doc.root.get(),"p");
     Check(p && !p->children.empty(),"No result element");
-    if(p->children.front()->text!=expected) {
-        std::cerr<<name<<": expected ["<<expected<<"] actual ["<<p->children.front()->text<<"]\n";
+    std::string rendered;
+    GatherText(*p,rendered);
+    if(rendered!=expected) {
+        std::cerr<<name<<": expected ["<<expected<<"] actual ["<<rendered<<"]\n";
         throw std::runtime_error("Unexpected DOM output");
     }
 }
