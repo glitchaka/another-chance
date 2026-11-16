@@ -579,6 +579,8 @@ int wmain(int argc, wchar_t** argv) {
         // A real navigation must never paint the "cannot represent" page
         // while its author stylesheets are still downloading.
         constexpr UINT kRenderErrorPaintCount = WM_APP + 46;
+        RedrawWindow(browser.Window(), nullptr, nullptr,
+                     RDW_INVALIDATE | RDW_UPDATENOW);
         Check(SendMessageW(browser.Window(), kRenderErrorPaintCount, 0, 0) == 0,
               "Browser flashed a false render-error page during initial navigation");
         std::cout << "PASS: first navigation did not flash false render-error page\n";
@@ -626,6 +628,8 @@ int wmain(int argc, wchar_t** argv) {
         Check(Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") && server.htmlRequests.load() > 1; }, 15000),
               "Browser back history did not navigate");
+        RedrawWindow(browser.Window(), nullptr, nullptr,
+                     RDW_INVALIDATE | RDW_UPDATENOW);
         Check(SendMessageW(browser.Window(), kRenderErrorPaintCount, 0, 0) == 0,
               "Browser flashed a false render-error page while navigating links or history");
         std::cout << "PASS: back navigation\n";
