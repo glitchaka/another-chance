@@ -37,7 +37,7 @@ struct HttpClient::State {
     HINTERNET session = nullptr;
     State() {
         session = WinHttpOpen(
-            L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AnotherChance/0.2",
+            L"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
             WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
             WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (session) WinHttpSetTimeouts(session,5000,5000,8000,10000);
@@ -128,8 +128,8 @@ Response HttpClient::Request(const std::wstring& url,
     WinHttpSetOption(request, WINHTTP_OPTION_DECOMPRESSION,
                      &decompression, sizeof(decompression));
     std::wstring headers =
-        L"Accept: text/html,application/xhtml+xml,text/plain,*/*;q=0.5\r\n"
-        L"Accept-Language: es-CL,es;q=0.9,en;q=0.6\r\n";
+        L"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8\r\n"
+        L"Accept-Language: es-CL,es;q=0.9,en-US;q=0.7,en;q=0.5\r\n";
     const bool post = std::wstring_view(method) == L"POST";
     if (post) headers +=
         L"Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n";
