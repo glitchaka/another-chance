@@ -5,7 +5,7 @@
 #include <vector>
 
 namespace ac::script::js {
-enum class TokenKind { Identifier, Number, String, Symbol, End };
+enum class TokenKind { Identifier, Number, String, RegExp, Symbol, End };
 struct Token {
     TokenKind kind = TokenKind::End;
     std::string text;
