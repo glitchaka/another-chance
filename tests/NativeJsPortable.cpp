@@ -113,6 +113,22 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("dom-node-detach",
+             "const root=document.getElementById('result');"
+             "const text=document.createTextNode('working');"
+             "root.appendChild(text);"
+             "root.removeChild(text);"
+             "root.appendChild(text);",
+             "working");
+        Test("retained-innerhtml-node",
+             "const root=document.getElementById('result');"
+             "root.innerHTML='<span>kept</span>';"
+             "const old=document.querySelector('span');"
+             "root.innerHTML='temporary';"
+             "root.appendChild(old);"
+             "root.removeChild(old);"
+             "root.textContent='reused';",
+             "reused");
         Test("dynamic-element-style",
              "const element=document.getElementById('result');"
              "element.style.display='none';"
