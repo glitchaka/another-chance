@@ -327,6 +327,30 @@ void TestLayoutGeometry() {
           L"https://example.org/a", "flex first column link");
     Check(layout.LinkAt(213, 24, 0, 0) ==
           L"https://example.org/b", "flex second column link");
+    auto crowdedNavigation = ac::html::Parse(
+        "<nav style='display:flex;gap:8px'>"
+        "<button>Services</button><button>Images</button>"
+        "<button>Videos</button><button>Maps</button>"
+        "<button>Translate</button><button>Weather</button>"
+        "<button>Mail</button><button>Games</button></nav>");
+    layout.Reflow(dc,crowdedNavigation,sheet,images,url,520);
+    const auto& crowdedControls=layout.Controls();
+    Check(crowdedControls.size()==8,
+          "all responsive navigation controls remain in the layout");
+    Check(crowdedControls[1].rect.left-crowdedControls[0].rect.left>=110,
+          "flex navigation tracks cannot collapse into character-sized columns");
+    Check(crowdedControls[3].rect.top>crowdedControls[0].rect.top,
+          "overflowing navigation controls wrap onto another row");
+    auto crowdedGrid = ac::html::Parse(
+        "<div style='display:grid;grid-template-columns:repeat(10,1fr);gap:8px'>"
+        "<button>Services</button><button>Images</button>"
+        "<button>Videos</button><button>Maps</button>"
+        "<button>Translate</button><button>Weather</button></div>");
+    layout.Reflow(dc,crowdedGrid,sheet,images,url,520);
+    const auto& gridControls=layout.Controls();
+    Check(gridControls.size()==6 &&
+          gridControls[3].rect.top>gridControls[0].rect.top,
+          "excess CSS grid tracks must wrap instead of rendering one-letter columns");
     DeleteDC(dc);
 }
 
