@@ -582,7 +582,83 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Function &&
+                    if(result.value.kind==Value::Kind::Text &&
+                       (member=="includes" || member=="startsWith" ||
+                        member=="endsWith" || member=="indexOf" ||
+                        member=="slice" || member=="substring" ||
+                        member=="trim" || member=="toLowerCase" ||
+                        member=="toUpperCase" || member=="split")) {
+                        const std::string input=result.value.text;
+                        const std::string needle=args.empty()?"undefined":args[0].String();
+                        if(member=="includes") {
+                            result={Value::Bool(input.find(needle)!=std::string::npos),{}};
+                        } else if(member=="startsWith") {
+                            result={Value::Bool(input.starts_with(needle)),{}};
+                        } else if(member=="endsWith") {
+                            result={Value::Bool(input.ends_with(needle)),{}};
+                        } else if(member=="indexOf") {
+                            const auto position=input.find(needle);
+                            result={Value::Num(position==std::string::npos?-1.0:
+                                               static_cast<double>(position)),{}};
+                        } else if(member=="trim") {
+                            auto begin=input.find_first_not_of(" \t\r\n");
+                            if(begin==std::string::npos) result={Value::Str(""),{}};
+                            else {
+                                const auto end=input.find_last_not_of(" \t\r\n");
+                                result={Value::Str(input.substr(begin,end-begin+1)),{}};
+                            }
+                        } else if(member=="toLowerCase" || member=="toUpperCase") {
+                            auto transformed=input;
+                            for(auto& character:transformed) {
+                                const auto byte=static_cast<unsigned char>(character);
+                                character=static_cast<char>(
+                                    member=="toLowerCase"?std::tolower(byte):std::toupper(byte));
+                            }
+                            result={Value::Str(std::move(transformed)),{}};
+                        } else if(member=="slice" || member=="substring") {
+                            const auto length=static_cast<long long>(input.size());
+                            auto normalized=[&](size_t argument,long long fallback) {
+                                if(args.size()<=argument) return fallback;
+                                double n=args[argument].Number();
+                                if(std::isnan(n)) return 0LL;
+                                if(n>=static_cast<double>(length)) return length;
+                                if(n<=-static_cast<double>(length))
+                                    return member=="slice"?0LL:0LL;
+                                auto index=static_cast<long long>(n);
+                                if(member=="slice" && index<0) index+=length;
+                                return std::clamp(index,0LL,length);
+                            };
+                            long long begin=normalized(0,0);
+                            long long end=normalized(1,length);
+                            if(member=="substring" && begin>end) std::swap(begin,end);
+                            result={Value::Str(input.substr(static_cast<size_t>(begin),
+                                static_cast<size_t>(std::max(0LL,end-begin)))),{}};
+                        } else if(member=="split") {
+                            std::vector<Value> pieces;
+                            if(args.empty()) {
+                                pieces.push_back(Value::Str(input));
+                            } else if(needle.empty()) {
+                                for(char character:input)
+                                    pieces.push_back(Value::Str(std::string(1,character)));
+                            } else {
+                                size_t start=0;
+                                while(start<=input.size() && pieces.size()<10000) {
+                                    const auto found=input.find(needle,start);
+                                    pieces.push_back(Value::Str(input.substr(start,
+                                        found==std::string::npos?std::string::npos:found-start)));
+                                    if(found==std::string::npos) break;
+                                    start=found+needle.size();
+                                }
+                            }
+                            if(args.size()>1) {
+                                const auto limit=args[1].Number();
+                                if(std::isfinite(limit) && limit>=0 &&
+                                   limit<static_cast<double>(pieces.size()))
+                                    pieces.resize(static_cast<size_t>(limit));
+                            }
+                            result={Value::ArrayValue(std::move(pieces)),{}};
+                        }
+                    } else if(result.value.kind==Value::Kind::Function &&
                        (member=="call" || member=="apply")) {
                         std::vector<Value> forwarded;
                         if(member=="call") {
