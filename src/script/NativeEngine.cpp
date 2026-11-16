@@ -567,8 +567,13 @@ class Interpreter {
                     do { args.push_back(Expression(2).value); } while(Match(","));
                     Expect(")");
                 }
-                if(result.value.kind!=Value::Kind::Function)
-                    throw std::runtime_error("Attempt to call non-function");
+                if(result.value.kind!=Value::Kind::Function) {
+                    const auto offset=pos_ ? tokens_[pos_-1].offset:0;
+                    const auto referent=result.path.empty()?"<expression>":result.path;
+                    throw std::runtime_error(
+                        "Cannot call " + referent + " (" + result.value.String() +
+                        ") near script byte " + std::to_string(offset));
+                }
                 result={CallFunction(result.value,args),{}};
             } else if(Match("[")) {
                 const auto key=Expression().value;
@@ -1566,13 +1571,15 @@ public:
             while(Peek().kind!=TokenKind::End && stats_.navigation.empty()) Statement();
             return true;
         } catch(const std::exception& error) {
-            stats_.lastError=error.what();
+            if(stats_.lastError.empty()) stats_.lastError=error.what();
             return false;
         } catch(const ThrowSignal& error) {
-            stats_.lastError="Uncaught JavaScript exception: "+error.value.String();
+            if(stats_.lastError.empty())
+                stats_.lastError="Uncaught JavaScript exception: "+error.value.String();
             return false;
         } catch(...) {
-            stats_.lastError="Unsupported JavaScript execution failure";
+            if(stats_.lastError.empty())
+                stats_.lastError="Unsupported JavaScript execution failure";
             return false;
         }
     }
