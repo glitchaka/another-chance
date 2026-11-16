@@ -669,6 +669,108 @@ class Interpreter {
                         Expect(")");
                     }
                     if(result.value.kind==Value::Kind::Function &&
+                       result.value.text=="@builtin:Object" &&
+                       (member=="create" || member=="assign" ||
+                        member=="keys" || member=="values" ||
+                        member=="hasOwn" || member=="freeze" ||
+                        member=="isFrozen" || member=="defineProperty" ||
+                        member=="defineProperties" ||
+                        member=="getPrototypeOf" || member=="setPrototypeOf" ||
+                        member=="getOwnPropertyDescriptor")) {
+                        const Value target=args.empty()?Value{}:args[0];
+                        if(member=="create") {
+                            if(target.kind!=Value::Kind::Object &&
+                               target.kind!=Value::Kind::Null)
+                                throw std::runtime_error("Object.create requires object or null prototype");
+                            auto created=Value::ObjectValue({});
+                            if(target.kind==Value::Kind::Object)
+                                objectPrototypes_[created.object.get()]=target;
+                            result={created,{}};
+                        } else if(member=="keys" || member=="values") {
+                            if(target.kind!=Value::Kind::Object || !target.object)
+                                throw std::runtime_error("Object.keys requires an object");
+                            std::vector<Value> members;
+                            for(const auto& [key,val]:*target.object)
+                                members.push_back(member=="keys"?Value::Str(key):val);
+                            result={Value::ArrayValue(std::move(members)),{}};
+                        } else if(member=="hasOwn") {
+                            const bool owns=target.kind==Value::Kind::Object &&
+                                target.object && args.size()>1 &&
+                                target.object->contains(args[1].String());
+                            result={Value::Bool(owns),{}};
+                        } else if(member=="isFrozen") {
+                            result={Value::Bool(target.kind==Value::Kind::Object &&
+                                target.object && frozenObjects_.contains(target.object.get())),{}};
+                        } else if(member=="freeze") {
+                            if(target.kind==Value::Kind::Object && target.object)
+                                frozenObjects_.insert(target.object.get());
+                            result={target,{}};
+                        } else if(member=="getPrototypeOf") {
+                            if(target.kind!=Value::Kind::Object || !target.object)
+                                throw std::runtime_error("Object.getPrototypeOf requires object");
+                            const auto found=objectPrototypes_.find(target.object.get());
+                            result={found==objectPrototypes_.end()
+                                ?Value::Special(Value::Kind::Null):found->second,{}};
+                        } else if(member=="setPrototypeOf") {
+                            if(target.kind!=Value::Kind::Object || !target.object ||
+                               args.size()<2 ||
+                               (args[1].kind!=Value::Kind::Object &&
+                                args[1].kind!=Value::Kind::Null))
+                                throw std::runtime_error("Object.setPrototypeOf invalid arguments");
+                            objectPrototypes_[target.object.get()]=args[1];
+                            result={target,{}};
+                        } else if(member=="assign") {
+                            if(target.kind!=Value::Kind::Object || !target.object)
+                                throw std::runtime_error("Object.assign target must be object");
+                            if(!frozenObjects_.contains(target.object.get()))
+                                for(size_t index=1;index<args.size();++index) {
+                                    const auto& source=args[index];
+                                    if(source.kind!=Value::Kind::Object || !source.object) continue;
+                                    for(const auto& [key,val]:*source.object)
+                                        target.object->insert_or_assign(key,val);
+                                }
+                            result={target,{}};
+                        } else if(member=="getOwnPropertyDescriptor") {
+                            if(target.kind!=Value::Kind::Object || !target.object ||
+                               args.size()<2 || !target.object->contains(args[1].String())) {
+                                result={};
+                            } else {
+                                const auto key=args[1].String();
+                                auto descriptor=Value::ObjectValue({
+                                    {"value",target.object->at(key)},
+                                    {"writable",Value::Bool(!frozenObjects_.contains(target.object.get()))},
+                                    {"enumerable",Value::Bool(true)},
+                                    {"configurable",Value::Bool(!frozenObjects_.contains(target.object.get()))}});
+                                result={descriptor,{}};
+                            }
+                        } else if(member=="defineProperty" || member=="defineProperties") {
+                            if(target.kind!=Value::Kind::Object || !target.object ||
+                               frozenObjects_.contains(target.object.get()))
+                                throw std::runtime_error("Object.defineProperty target not extensible");
+                            auto define=[&](const std::string& name,const Value& desc) {
+                                if(desc.kind!=Value::Kind::Object || !desc.object)
+                                    throw std::runtime_error("Invalid property descriptor");
+                                auto found=desc.object->find("value");
+                                if(found!=desc.object->end())
+                                    target.object->insert_or_assign(name,found->second);
+                                auto getter=desc.object->find("get");
+                                if(getter!=desc.object->end() &&
+                                   getter->second.kind==Value::Kind::Function)
+                                    getters_[target.object.get()][name]=getter->second;
+                            };
+                            if(member=="defineProperty") {
+                                if(args.size()<3) throw std::runtime_error("Missing property descriptor");
+                                define(args[1].String(),args[2]);
+                            } else {
+                                if(args.size()<2 || args[1].kind!=Value::Kind::Object ||
+                                   !args[1].object)
+                                    throw std::runtime_error("Missing property descriptors");
+                                for(const auto& [key,desc]:*args[1].object)
+                                    define(key,desc);
+                            }
+                            result={target,{}};
+                        }
+                    } else if(result.value.kind==Value::Kind::Function &&
                        result.value.text=="@builtin:Array" && member=="isArray") {
                         result={Value::Bool(!args.empty() &&
                             args[0].kind==Value::Kind::Array),{}};
