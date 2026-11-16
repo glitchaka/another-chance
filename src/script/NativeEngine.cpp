@@ -11,6 +11,7 @@
 #include <exception>
 #include <iomanip>
 #include <memory>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -133,6 +134,7 @@ class Interpreter {
     unsigned switchDepth_=0;
     unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
+    std::mt19937_64 rng_{std::random_device{}()};
     std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
         std::make_shared<std::unordered_map<std::string,Value>>();
     std::vector<std::unique_ptr<Node>> detached_;
@@ -431,7 +433,7 @@ class Interpreter {
             if(name=="JSON") return {Value::Special(Value::Kind::Json),{}};
             if(name=="String" || name=="Number" || name=="Boolean" ||
                name=="parseInt" || name=="parseFloat" || name=="isNaN" ||
-               name=="eval") {
+               name=="eval" || name=="Array" || name=="Object") {
                 auto builtin=Value::Special(Value::Kind::Function);
                 builtin.text="@builtin:"+name;
                 return {builtin,{}};
@@ -455,6 +457,20 @@ class Interpreter {
         if(value.text=="@builtin:String") return Value::Str(first.String());
         if(value.text=="@builtin:Number") return Value::Num(args.empty()?0:first.Number());
         if(value.text=="@builtin:Boolean") return Value::Bool(first.Truth());
+        if(value.text=="@builtin:Array") {
+            if(args.size()==1 && args[0].kind==Value::Kind::Number) {
+                const double size=args[0].number;
+                if(!std::isfinite(size) || size<0 || std::floor(size)!=size || size>100000)
+                    throw std::runtime_error("Invalid JavaScript Array length");
+                return Value::ArrayValue(std::vector<Value>(static_cast<size_t>(size)));
+            }
+            return Value::ArrayValue(args);
+        }
+        if(value.text=="@builtin:Object") {
+            if(!args.empty() && (first.kind==Value::Kind::Object ||
+                                 first.kind==Value::Kind::Array)) return first;
+            return Value::ObjectValue({});
+        }
         if(value.text=="@builtin:parseInt") {
             const auto input=first.String();
             const int radix=args.size()>1?static_cast<int>(args[1].Number()):10;
@@ -627,7 +643,28 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::Text &&
+                    if(result.value.kind==Value::Kind::Function &&
+                       result.value.text=="@builtin:Array" && member=="isArray") {
+                        result={Value::Bool(!args.empty() &&
+                            args[0].kind==Value::Kind::Array),{}};
+                    } else if(result.value.kind==Value::Kind::Function &&
+                              result.value.text=="@builtin:String" &&
+                              member=="fromCharCode") {
+                        std::string characters;
+                        for(const auto& arg:args) {
+                            const unsigned cp=Uint32(arg.Number())&65535u;
+                            if(cp<0x80) characters+=static_cast<char>(cp);
+                            else if(cp<0x800) {
+                                characters+=static_cast<char>(0xc0|(cp>>6));
+                                characters+=static_cast<char>(0x80|(cp&63));
+                            } else {
+                                characters+=static_cast<char>(0xe0|(cp>>12));
+                                characters+=static_cast<char>(0x80|((cp>>6)&63));
+                                characters+=static_cast<char>(0x80|(cp&63));
+                            }
+                        }
+                        result={Value::Str(std::move(characters)),{}};
+                    } else if(result.value.kind==Value::Kind::Text &&
                        (member=="includes" || member=="startsWith" ||
                         member=="endsWith" || member=="indexOf" ||
                         member=="slice" || member=="substring" ||
@@ -725,9 +762,12 @@ class Interpreter {
                     } else if(result.value.kind==Value::Kind::Math &&
                        (member=="abs" || member=="floor" || member=="ceil" ||
                         member=="round" || member=="min" || member=="max" ||
-                        member=="pow" || member=="sqrt" || member=="trunc")) {
+                        member=="pow" || member=="sqrt" || member=="trunc" ||
+                        member=="random")) {
                         double value=args.empty()?std::nan(""):args.front().Number();
-                        if(member=="abs") value=std::fabs(value);
+                        if(member=="random")
+                            value=std::generate_canonical<double,53>(rng_);
+                        else if(member=="abs") value=std::fabs(value);
                         else if(member=="floor") value=std::floor(value);
                         else if(member=="ceil") value=std::ceil(value);
                         else if(member=="trunc") value=std::trunc(value);
