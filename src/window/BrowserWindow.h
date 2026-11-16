@@ -128,6 +128,7 @@ private:
     std::vector<std::wstring> history_;
     size_t historyIndex_ = 0;
 
+    net::HttpClient http_;
     std::thread worker_;
     std::mutex taskMutex_;
     std::condition_variable taskCondition_;
