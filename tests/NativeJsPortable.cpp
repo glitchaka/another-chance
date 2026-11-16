@@ -79,6 +79,18 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("native-constructor",
+             "function Counter(start){this.value=start;}"
+             "const counter=new Counter(40);"
+             "counter.value+=2;"
+             "document.getElementById('result').textContent=String(counter.value);",
+             "42");
+        Test("function-this",
+             "function add(n){return this.base+n;}"
+             "const receiver={base:40};"
+             "document.getElementById('result').textContent="
+             "String(add.call(receiver,2));",
+             "42");
         Test("object-prototypes",
              "const base={baseValue:40};"
              "const child=Object.create(base);"
