@@ -389,6 +389,7 @@ void BrowserWindow::StopWorker() {
         while (!pendingJobs_.IsEmpty()) delete pendingJobs_.RemoveFirst();
     }
     taskCondition_.notify_all();
+    http_.Cancel();
     if (worker_.joinable()) worker_.join();
 
     if (hwnd_) {
@@ -406,7 +407,7 @@ void BrowserWindow::StopWorker() {
 }
 
 void BrowserWindow::WorkerLoop() {
-    net::HttpClient http;
+    net::HttpClient& http = http_;
     while (true) {
         std::unique_ptr<NavigationJob> job;
         {
