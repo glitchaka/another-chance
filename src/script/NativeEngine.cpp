@@ -1131,7 +1131,7 @@ class Interpreter {
                               (member=="assign" || member=="replace")) {
                         if(!args.empty()) Navigate(args[0]);
                         result={};
-                    } else throw std::runtime_error("Unsupported native JavaScript method");
+                    } else throw std::runtime_error("Unsupported native JavaScript method: "+member+" on kind "+std::to_string(static_cast<int>(result.value.kind))+" value "+result.value.String());
                 } else {
                     const auto old=result;
                     result.value=ReadProperty(old.value,member);
