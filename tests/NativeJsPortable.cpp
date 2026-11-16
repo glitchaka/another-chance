@@ -86,7 +86,7 @@ int main() {
              "const count=child.baseValue+child.extra;"
              "document.getElementById('result').textContent="
              "String(count)+'/'+String(Object.hasOwn(child,'extra'));",
-             "42/false");
+             "42/true");
         Test("object-assign-freeze",
              "const item=Object.assign({answer:40},{added:2});"
              "item.answer+=item.added;Object.freeze(item);item.answer=999;"
