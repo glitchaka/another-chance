@@ -696,7 +696,9 @@ class Interpreter {
                         } else if(member=="hasOwn") {
                             const bool owns=target.kind==Value::Kind::Object &&
                                 target.object && args.size()>1 &&
-                                target.object->contains(args[1].String());
+                                (target.object->contains(args[1].String()) ||
+                                 (getters_.contains(target.object.get()) &&
+                                  getters_[target.object.get()].contains(args[1].String())));
                             result={Value::Bool(owns),{}};
                         } else if(member=="isFrozen") {
                             result={Value::Bool(target.kind==Value::Kind::Object &&
