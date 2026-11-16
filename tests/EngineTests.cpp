@@ -220,6 +220,30 @@ void TestStyles() {
                      ".panel {color:#aabbcc;} }", 400);
     Check(responsive.Compute(*wrapper, parent).color ==
           RGB(0xaa,0xbb,0xcc), "mobile media query");
+    // Modern author stylesheets routinely group selectors with :is(),
+    // :where() and :not(). These must match without breaking on whitespace
+    // inside functional pseudo-class arguments.
+    auto modernDocument = ac::html::Parse(
+        "<html><body><main><div class='card active'>Alpha</div>"
+        "<div class='card'>Beta</div><span class='note'>Gamma</span>"
+        "</main></body></html>");
+    const auto* modernMain = Find(*modernDocument.root, "main");
+    Check(modernMain && modernMain->children.size() == 3,
+          "modern selector DOM fixture");
+    ac::style::Sheet modern;
+    modern.Parse("main :where(.card, .note) {color:#123456;}"
+                 "main > :is(.card, .note):not(.active) {font-weight:bold;}"
+                 ".card:first-child {text-decoration:underline;}"
+                 ".card:last-child {color:red;}");
+    const auto alpha = modern.Compute(*modernMain->children[0],parent);
+    const auto beta = modern.Compute(*modernMain->children[1],parent);
+    const auto gamma = modern.Compute(*modernMain->children[2],parent);
+    Check(alpha.color == RGB(0x12,0x34,0x56) && alpha.underline &&
+          !alpha.bold, "where selector and :not exclude active child");
+    Check(beta.color == RGB(0x12,0x34,0x56) && beta.bold,
+          "functional pseudo-classes with multiple arguments");
+    Check(gamma.bold && gamma.color == RGB(0x12,0x34,0x56),
+          "is selector matches other element types");
     responsive.Parse("@layer components { .panel {font-size:20px;} }", 800);
     Check(responsive.Compute(*wrapper, parent).fontSize == 20,
           "nested stylesheet layer");
