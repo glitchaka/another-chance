@@ -15,6 +15,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -137,6 +138,9 @@ class Interpreter {
     std::mt19937_64 rng_{std::random_device{}()};
     std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
         std::make_shared<std::unordered_map<std::string,Value>>();
+    std::unordered_map<const void*,Value> objectPrototypes_;
+    std::unordered_set<const void*> frozenObjects_;
+    std::unordered_map<const void*,std::unordered_map<std::string,Value>> getters_;
     std::vector<std::unique_ptr<Node>> detached_;
     std::vector<Token> tokens_;
     size_t pos_=0;
@@ -187,8 +191,28 @@ class Interpreter {
         if(base.kind==Value::Kind::Location && name=="href")
             return Value::Str(ac::url::ToUtf8(base_));
         if(base.kind==Value::Kind::Object && base.object) {
+            const void* origin=base.object.get();
+            auto getters=getters_.find(origin);
+            if(getters!=getters_.end()) {
+                auto getter=getters->second.find(name);
+                if(getter!=getters->second.end() &&
+                   getter->second.kind==Value::Kind::Function)
+                    return CallFunction(getter->second,{});
+            }
             auto property=base.object->find(name);
-            return property==base.object->end()?Value{}:property->second;
+            if(property!=base.object->end()) return property->second;
+            std::unordered_set<const void*> seen{origin};
+            auto prototype=objectPrototypes_.find(origin);
+            for(unsigned depth=0;depth<32 &&
+                prototype!=objectPrototypes_.end();++depth) {
+                const Value& inherited=prototype->second;
+                if(inherited.kind!=Value::Kind::Object || !inherited.object) break;
+                if(!seen.insert(inherited.object.get()).second) break;
+                auto next=inherited.object->find(name);
+                if(next!=inherited.object->end()) return next->second;
+                prototype=objectPrototypes_.find(inherited.object.get());
+            }
+            return {};
         }
         if(base.kind==Value::Kind::Text && name=="length") return Value::Num(base.text.size());
         if(base.kind==Value::Kind::Array && base.array && name=="length")
@@ -210,7 +234,8 @@ class Interpreter {
         if(target.propertyObject) {
             const auto delimiter=target.path.rfind('|');
             if(delimiter==std::string::npos) throw std::runtime_error("Invalid object property");
-            (*target.propertyObject)[target.path.substr(delimiter+1)]=value;
+            if(!frozenObjects_.contains(target.propertyObject.get()))
+                (*target.propertyObject)[target.path.substr(delimiter+1)]=value;
             return;
         }
         if(target.propertyNode) {
