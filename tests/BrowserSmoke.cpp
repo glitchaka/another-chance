@@ -576,6 +576,12 @@ int wmain(int argc, wchar_t** argv) {
                       << "\n";
         }
         Check(loaded, "Could not render HTML fetched from loopback HTTP");
+        // A real navigation must never paint the "cannot represent" page
+        // while its author stylesheets are still downloading.
+        constexpr UINT kRenderErrorPaintCount = WM_APP + 46;
+        Check(SendMessageW(browser.Window(), kRenderErrorPaintCount, 0, 0) == 0,
+              "Browser flashed a false render-error page during initial navigation");
+        std::cout << "PASS: first navigation did not flash false render-error page\n";
         std::cout << "PASS: open window + fetch HTML + parsed page title\n";
 
         Check(Until([&] { return server.cssRequests.load() > 0 &&
@@ -620,6 +626,8 @@ int wmain(int argc, wchar_t** argv) {
         Check(Until([&] { return browser.IsAlive() &&
             browser.HasTitle(L"Inicio de prueba") && server.htmlRequests.load() > 1; }, 15000),
               "Browser back history did not navigate");
+        Check(SendMessageW(browser.Window(), kRenderErrorPaintCount, 0, 0) == 0,
+              "Browser flashed a false render-error page while navigating links or history");
         std::cout << "PASS: back navigation\n";
 
         // Tabs are real controls: create a tab, then return to the first
