@@ -1004,6 +1004,63 @@ class Interpreter {
         if(s=="**") return 12;
         return -1;
     }
+    void SkipOperand(int precedence) {
+        unsigned parens=0,brackets=0,braces=0;
+        while(Peek().kind!=TokenKind::End) {
+            const auto& token=Peek().text;
+            if(!parens && !brackets && !braces) {
+                if(token==";" || token=="," || token==")" ||
+                   token=="]" || token=="}" || token==":" || token=="?")
+                    return;
+                const int rank=Priority(token);
+                if(rank>=0 && rank<precedence) return;
+            }
+            if(token=="(") ++parens;
+            else if(token=="[") ++brackets;
+            else if(token=="{") ++braces;
+            else if(token==")") {
+                if(!parens) return;
+                --parens;
+            } else if(token=="]") {
+                if(!brackets) return;
+                --brackets;
+            } else if(token=="}") {
+                if(!braces) return;
+                --braces;
+            }
+            ++pos_;
+        }
+    }
+    void SkipConditionalBranch(bool untilColon) {
+        unsigned parens=0,brackets=0,braces=0,ternaries=0;
+        while(Peek().kind!=TokenKind::End) {
+            const auto& token=Peek().text;
+            if(!parens && !brackets && !braces) {
+                if(token=="?") ++ternaries;
+                else if(token==":") {
+                    if(ternaries) --ternaries;
+                    else if(untilColon) return;
+                }
+                if(!untilColon && !ternaries &&
+                   (token==";" || token=="," || token==")" ||
+                    token=="]" || token=="}" || token==":")) return;
+            }
+            if(token=="(") ++parens;
+            else if(token=="[") ++brackets;
+            else if(token=="{") ++braces;
+            else if(token==")") {
+                if(!parens) return;
+                --parens;
+            } else if(token=="]") {
+                if(!brackets) return;
+                --brackets;
+            } else if(token=="}") {
+                if(!braces) return;
+                --braces;
+            }
+            ++pos_;
+        }
+    }
     Result Expression(int min=1) {
         auto left=Postfix();
         while(true) {
@@ -1022,7 +1079,7 @@ class Interpreter {
                 left={a,{}};
                 continue;
             }
-            auto right=Expression(rank+(assignment?0:1));
+            auto right=Expression(rank+((assignment || op=="**")?0:1));
             auto b=right.value;
             if(assignment) {
                 Value value=b;
