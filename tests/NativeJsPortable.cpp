@@ -79,6 +79,20 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("object-prototypes",
+             "const base={baseValue:40};"
+             "const child=Object.create(base);"
+             "Object.defineProperty(child,'extra',{get:function(){return 2;}});"
+             "const count=child.baseValue+child.extra;"
+             "document.getElementById('result').textContent="
+             "String(count)+'/'+String(Object.hasOwn(child,'extra'));",
+             "42/false");
+        Test("object-assign-freeze",
+             "const item=Object.assign({answer:40},{added:2});"
+             "item.answer+=item.added;Object.freeze(item);item.answer=999;"
+             "document.getElementById('result').textContent="
+             "String(item.answer)+'/'+String(Object.isFrozen(item));",
+             "42/true");
         Test("browser-intrinsics",
              "const values=Array(3);"
              "const letters=String.fromCharCode(65,66);"
