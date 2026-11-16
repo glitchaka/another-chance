@@ -48,7 +48,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         {static_cast<BYTE>(FVIRTKEY | FALT), VK_LEFT, ac::BrowserWindow::kBack},
         {static_cast<BYTE>(FVIRTKEY | FALT), VK_RIGHT, ac::BrowserWindow::kForward},
         {static_cast<BYTE>(FVIRTKEY | FCONTROL), 'T', ac::BrowserWindow::kNewTab},
-        {static_cast<BYTE>(FVIRTKEY | FCONTROL), 'W', ac::BrowserWindow::kCloseTab}
+        {static_cast<BYTE>(FVIRTKEY | FCONTROL), 'W', ac::BrowserWindow::kCloseTab},
+        {static_cast<BYTE>(FVIRTKEY), VK_F12, ac::BrowserWindow::kInspect},
+        {static_cast<BYTE>(FVIRTKEY | FCONTROL | FSHIFT), 'C', ac::BrowserWindow::kInspectMode}
     };
     HACCEL accelerators = CreateAcceleratorTableW(
         shortcuts, static_cast<int>(sizeof(shortcuts) / sizeof(shortcuts[0])));
