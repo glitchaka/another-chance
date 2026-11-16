@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <mutex>
 
 namespace ac::net {
 namespace {
@@ -35,6 +36,9 @@ std::wstring QueryStringHeader(HINTERNET request, DWORD flag) {
 
 struct HttpClient::State {
     HINTERNET session = nullptr;
+    std::mutex requestMutex;
+    HINTERNET activeRequest = nullptr;
+    bool cancelled = false;
     State() {
         session = WinHttpOpen(
             L"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
@@ -48,6 +52,18 @@ struct HttpClient::State {
 };
 HttpClient::HttpClient() : state_(std::make_unique<State>()) {}
 HttpClient::~HttpClient() = default;
+void HttpClient::Cancel() noexcept {
+    if (!state_) return;
+    std::lock_guard lock(state_->requestMutex);
+    state_->cancelled = true;
+    // WinHttpCloseHandle interrupts synchronous send/receive/read operations.
+    // The worker's request guard relinquishes ownership of the closed handle.
+    if (state_->activeRequest) {
+        WinHttpCloseHandle(state_->activeRequest);
+        state_->activeRequest = nullptr;
+    }
+}
+
 
 Response HttpClient::Get(const std::wstring& url, size_t maxBytes) const {
     return Request(url,L"GET",{},maxBytes);
@@ -122,6 +138,26 @@ Response HttpClient::Request(const std::wstring& url,
         response.error = ErrorCode(L"No se pudo crear la solicitud");
         return response;
     }
+
+    {
+        std::lock_guard lock(state_->requestMutex);
+        if (state_->cancelled) {
+            response.error = L"Solicitud cancelada al cerrar el navegador.";
+            return response;
+        }
+        state_->activeRequest = request.handle;
+    }
+    struct ActiveRequestGuard {
+        State& state;
+        InternetHandle& request;
+        ~ActiveRequestGuard() {
+            std::lock_guard lock(state.requestMutex);
+            if (state.activeRequest == request.handle)
+                state.activeRequest = nullptr;
+            else
+                request.handle = nullptr; // Cancel() already closed it.
+        }
+    } activeRequestGuard{*state_, request};
 
     DWORD decompression = WINHTTP_DECOMPRESSION_FLAG_GZIP |
                           WINHTTP_DECOMPRESSION_FLAG_DEFLATE;
