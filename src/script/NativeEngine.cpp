@@ -1177,6 +1177,14 @@ class Interpreter {
                         detached_.push_back(std::move(created));
                         result={Value::NodeValue(pointer),{}};
                     } else if(result.value.kind==Value::Kind::Document &&
+                              member=="createTextNode") {
+                        auto created=std::make_unique<Node>();
+                        created->type=Node::Type::Text;
+                        created->text=args.empty()?"":args[0].String();
+                        auto* pointer=created.get();
+                        detached_.push_back(std::move(created));
+                        result={Value::NodeValue(pointer),{}};
+                    } else if(result.value.kind==Value::Kind::Document &&
                       (member=="getElementById" || member=="querySelector")) {
                         const auto argument=args.empty()?std::string{}:args[0].String();
                         const auto selector=member=="getElementById"?"#"+argument:argument;
@@ -1346,6 +1354,28 @@ class Interpreter {
                               result.value.element && member=="getAttribute") {
                         result={Value::Str(args.empty()?std::string{}:
                             result.value.element->Attribute(args[0].String())),{}};
+                    } else if(result.value.kind==Value::Kind::Element &&
+                              result.value.element &&
+                              (member=="remove" || member=="removeChild")) {
+                        Node* child=member=="remove"
+                            ?result.value.element
+                            :(!args.empty() && args[0].kind==Value::Kind::Element
+                                ?args[0].element:nullptr);
+                        if(child && child->parent &&
+                           (member=="remove" ||
+                            child->parent==result.value.element)) {
+                            auto& siblings=child->parent->children;
+                            for(auto it=siblings.begin();it!=siblings.end();++it) {
+                                if(it->get()!=child) continue;
+                                child->parent=nullptr;
+                                detached_.push_back(std::move(*it));
+                                siblings.erase(it);
+                                ++stats_.operations;
+                                break;
+                            }
+                        }
+                        result=member=="removeChild"?Result{Value::NodeValue(child),{}}:
+                            Result{};
                     } else if(result.value.kind==Value::Kind::Element &&
                               result.value.element && member=="appendChild") {
                         if(!args.empty() && args[0].kind==Value::Kind::Element &&
