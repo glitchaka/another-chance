@@ -109,6 +109,7 @@ private:
     int scrollY_ = 0;
     int wheelRemainder_ = 0;
     uint64_t chromePaintCount_ = 0;
+    uint64_t renderFailurePaintCount_ = 0;
     int clientWidth_ = 980;
     int clientHeight_ = 690;
     unsigned generation_ = 0;
