@@ -113,6 +113,19 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("dynamic-element-style",
+             "const element=document.getElementById('result');"
+             "element.style.display='none';"
+             "element.style.display='block';"
+             "element.style.setProperty('font-size','18px');"
+             "element.classList.add('ready');"
+             "element.classList.toggle('temporary');"
+             "element.classList.remove('temporary');"
+             "element.textContent=element.style.display+'/'+"
+             "element.style.getPropertyValue('font-size')+'/'+"
+             "String(element.classList.contains('ready'))+'/'+"
+             "String(element.classList.contains('temporary'));",
+             "block/18px/true/false");
         Test("dom-ready-events",
              "document.addEventListener('DOMContentLoaded',()=>{"
              "document.getElementById('result').textContent='ready';});",
