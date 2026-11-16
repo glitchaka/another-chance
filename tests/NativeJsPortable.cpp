@@ -79,6 +79,12 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("bitwise",
+             "let value=(15 & 3) + (7 ^ 2) + (4 | 1);"
+             "value+=1; value<<=1;"
+             "const answer=value+(2**3)+~(-1);"
+             "document.getElementById('result').textContent=String(answer);",
+             "36");
         Test("optional-chaining",
              "let counter=0;function side(){counter++;return 1;}"
              "const unavailable=null;const record={value:42};"
