@@ -137,6 +137,8 @@ class Interpreter {
     unsigned switchDepth_=0;
     unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
+    std::unordered_map<std::string,std::vector<Value>> eventListeners_;
+    std::vector<Value> scheduledCallbacks_;
     Value thisValue_=Value::Special(Value::Kind::Window);
     std::mt19937_64 rng_{std::random_device{}()};
     std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
@@ -179,6 +181,9 @@ class Interpreter {
         if(base.kind==Value::Kind::Document) {
             if(name=="title") return Value::Str(doc_.title);
             if(name=="body") return Value::NodeValue(FindTag(doc_.root.get(),"body"));
+            if(name=="head") return Value::NodeValue(FindTag(doc_.root.get(),"head"));
+            if(name=="documentElement") return Value::NodeValue(FindTag(doc_.root.get(),"html"));
+            if(name=="readyState") return Value::Str("complete");
             if(name=="location") return Value::Special(Value::Kind::Location);
         }
         if(base.kind==Value::Kind::Window) {
@@ -507,7 +512,8 @@ class Interpreter {
             if(name=="String" || name=="Number" || name=="Boolean" ||
                name=="parseInt" || name=="parseFloat" || name=="isNaN" ||
                name=="eval" || name=="Array" || name=="Object" ||
-               name=="RegExp") {
+               name=="RegExp" || name=="setTimeout" || name=="clearTimeout" ||
+               name=="queueMicrotask" || name=="requestAnimationFrame") {
                 auto builtin=Value::Special(Value::Kind::Function);
                 builtin.text="@builtin:"+name;
                 return {builtin,{}};
@@ -540,6 +546,26 @@ class Interpreter {
                 return Value::ArrayValue(std::vector<Value>(static_cast<size_t>(size)));
             }
             return Value::ArrayValue(args);
+        }
+        if(value.text=="@builtin:setTimeout" ||
+           value.text=="@builtin:queueMicrotask" ||
+           value.text=="@builtin:requestAnimationFrame") {
+            if(!args.empty() && args[0].kind==Value::Kind::Function) {
+                if(scheduledCallbacks_.size()>=128)
+                    throw std::runtime_error("Event callback limit exceeded");
+                scheduledCallbacks_.push_back(args[0]);
+                return Value::Num(scheduledCallbacks_.size());
+            }
+            return Value::Num(0);
+        }
+        if(value.text=="@builtin:clearTimeout") {
+            if(!args.empty()) {
+                const double id=args[0].Number();
+                if(std::isfinite(id) && id>=1 &&
+                   id<=static_cast<double>(scheduledCallbacks_.size()))
+                    scheduledCallbacks_[static_cast<size_t>(id)-1]=Value{};
+            }
+            return {};
         }
         if(value.text=="@builtin:RegExp") {
             if(first.kind==Value::Kind::RegExp && args.size()<2) return first;
@@ -734,7 +760,27 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if(result.value.kind==Value::Kind::RegExp &&
+                    if((result.value.kind==Value::Kind::Document ||
+                        result.value.kind==Value::Kind::Window ||
+                        result.value.kind==Value::Kind::Element) &&
+                       (member=="addEventListener" || member=="removeEventListener")) {
+                        if(args.size()>=2 && args[1].kind==Value::Kind::Function) {
+                            auto& callbacks=eventListeners_[args[0].String()];
+                            if(member=="addEventListener") {
+                                if(callbacks.size()>=128)
+                                    throw std::runtime_error("Event listener limit exceeded");
+                                callbacks.push_back(args[1]);
+                            } else {
+                                callbacks.erase(std::remove_if(
+                                    callbacks.begin(),callbacks.end(),
+                                    [&](const Value& old) {
+                                        return old.kind==Value::Kind::Function &&
+                                               old.text==args[1].text;
+                                    }),callbacks.end());
+                            }
+                        }
+                        result={};
+                    } else if(result.value.kind==Value::Kind::RegExp &&
                        (member=="test" || member=="exec")) {
                         if(!result.value.regexp)
                             throw std::runtime_error("Uncompiled regexp");
@@ -1854,6 +1900,43 @@ class Interpreter {
 public:
     Interpreter(Document& d,std::wstring_view base,Execution& stats):
         doc_(d),base_(base),stats_(stats) {}
+    void FlushReadyCallbacks() {
+        auto fire=[&](const std::string& name) {
+            auto found=eventListeners_.find(name);
+            if(found==eventListeners_.end()) return;
+            const auto callbacks=std::move(found->second);
+            eventListeners_.erase(found);
+            for(const auto& callback:callbacks) {
+                if(!stats_.navigation.empty()) return;
+                try {
+                    Tick();
+                    CallFunction(callback,{});
+                    ++stats_.operations;
+                } catch(const std::exception& error) {
+                    if(stats_.lastError.empty())
+                        stats_.lastError=std::string("Event ")+name+": "+error.what();
+                    ++stats_.unsupported;
+                }
+            }
+        };
+        fire("DOMContentLoaded");
+        fire("load");
+        const auto callbacks=std::move(scheduledCallbacks_);
+        scheduledCallbacks_.clear();
+        for(const auto& callback:callbacks) {
+            if(!stats_.navigation.empty()) break;
+            if(callback.kind!=Value::Kind::Function) continue;
+            try {
+                Tick();
+                CallFunction(callback,{});
+                ++stats_.operations;
+            } catch(const std::exception& error) {
+                if(stats_.lastError.empty())
+                    stats_.lastError=std::string("Scheduled callback: ")+error.what();
+                ++stats_.unsupported;
+            }
+        }
+    }
     bool Run(const std::string& source) {
         try {
             tokens_=js::Tokenize(source);
@@ -1915,6 +1998,7 @@ Execution ExecuteNative(Document& document,std::wstring_view baseUrl,
         if(!interpreter.Run(source)) ++report.unsupported;
         if(!report.navigation.empty()) break;
     }
+    if(report.navigation.empty()) interpreter.FlushReadyCallbacks();
     return report;
 }
 } // namespace ac::script
