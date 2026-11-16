@@ -124,6 +124,8 @@ class Interpreter {
         std::vector<std::string> parameters;
         std::vector<Token> body;
         std::shared_ptr<std::unordered_map<std::string,Value>> captured;
+        bool arrow=false;
+        Value lexicalThis;
     };
     std::unordered_map<std::string,Function> functions_;
     struct ReturnSignal { Value value; };
@@ -135,6 +137,7 @@ class Interpreter {
     unsigned switchDepth_=0;
     unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
+    Value thisValue_=Value::Special(Value::Kind::Window);
     std::mt19937_64 rng_{std::random_device{}()};
     std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
         std::make_shared<std::unordered_map<std::string,Value>>();
@@ -286,6 +289,8 @@ class Interpreter {
         Expect("=>");
         Function fn;
         fn.parameters=std::move(parameters);
+        fn.arrow=true;
+        fn.lexicalThis=thisValue_;
         if(callDepth_>0)
             fn.captured=std::make_shared<std::unordered_map<std::string,Value>>(vars_);
         if(Peek().text=="{") {
@@ -334,6 +339,27 @@ class Interpreter {
     }
     Result Primary() {
         Tick();
+        if(Match("new")) {
+            auto target=Primary();
+            while(Match(".")) {
+                if(Peek().kind!=TokenKind::Identifier)
+                    throw std::runtime_error("Missing constructor property name");
+                target.value=ReadProperty(target.value,tokens_[pos_++].text);
+            }
+            std::vector<Value> args;
+            if(Match("(")) {
+                if(!Match(")")) {
+                    do {args.push_back(Expression(2).value);} while(Match(","));
+                    Expect(")");
+                }
+            }
+            if(target.value.kind!=Value::Kind::Function)
+                throw std::runtime_error("Constructor is not a function");
+            auto instance=Value::ObjectValue({});
+            const auto returned=CallFunction(target.value,args,instance);
+            return {returned.kind==Value::Kind::Object ||
+                    returned.kind==Value::Kind::Array?returned:instance,{}};
+        }
         if(Match("function")) {
             std::string declaredName;
             if(Peek().kind==TokenKind::Identifier)
@@ -449,7 +475,8 @@ class Interpreter {
             if(name=="null") return {Value::Special(Value::Kind::Null),{}};
             if(name=="undefined") return {};
             if(name=="document") return {Value::Special(Value::Kind::Document),"document"};
-            if(name=="window" || name=="self" || name=="globalThis" || name=="this")
+            if(name=="this") return {thisValue_,{}};
+            if(name=="window" || name=="self" || name=="globalThis")
                 return {Value::Special(Value::Kind::Window),"window"};
             if(name=="location") return {Value::Special(Value::Kind::Location),"location"};
             if(name=="NaN") return {Value::Num(std::nan("")),{}};
@@ -477,7 +504,8 @@ class Interpreter {
         }
         throw std::runtime_error("Unsupported JavaScript primary near token: " + Peek().text + " at " + std::to_string(Peek().offset));
     }
-    Value CallFunction(const Value& value,const std::vector<Value>& args) {
+    Value CallFunction(const Value& value,const std::vector<Value>& args,
+                       Value receiver=Value{}) {
         const auto first = args.empty()?Value{}:args.front();
         if(value.text=="@builtin:String") return Value::Str(first.String());
         if(value.text=="@builtin:Number") return Value::Num(args.empty()?0:first.Number());
@@ -546,8 +574,13 @@ class Interpreter {
         if(callDepth_>=32) throw std::runtime_error("JavaScript recursion depth exceeded");
         ++callDepth_;
         const unsigned outerLoopDepth=loopDepth_;
+        const Value previousThis=thisValue_;
         loopDepth_=0;
         const Function function=found->second;
+        thisValue_=function.arrow?function.lexicalThis:
+            (receiver.kind==Value::Kind::Undefined ||
+             receiver.kind==Value::Kind::Null
+                 ?Value::Special(Value::Kind::Window):receiver);
         auto savedTokens=std::move(tokens_);
         const size_t savedPosition=pos_;
         auto savedVariables=vars_;
@@ -569,6 +602,7 @@ class Interpreter {
             pos_=savedPosition;
             --callDepth_;
             loopDepth_=outerLoopDepth;
+            thisValue_=previousThis;
             throw;
         }
         // A returned nested function retains its lexical variables.
@@ -597,6 +631,7 @@ class Interpreter {
         pos_=savedPosition;
         --callDepth_;
         loopDepth_=outerLoopDepth;
+        thisValue_=previousThis;
         return returned;
     }
     Result Postfix() {
@@ -879,7 +914,8 @@ class Interpreter {
                                   args[1].kind==Value::Kind::Array && args[1].array) {
                             forwarded=*args[1].array;
                         }
-                        result={CallFunction(result.value,forwarded),{}};
+                        result={CallFunction(result.value,forwarded,
+                            args.empty()?Value{}:args[0]),{}};
                     } else if(result.value.kind==Value::Kind::Json &&
                        member=="parse") {
                         if(args.empty()) throw std::runtime_error("JSON.parse requires input");
