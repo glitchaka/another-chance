@@ -17,6 +17,8 @@ class HttpClient {
 public:
     HttpClient();
     ~HttpClient();
+    // Interrupt an in-flight synchronous WinHTTP request during shutdown.
+    void Cancel() noexcept;
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
     [[nodiscard]] Response Get(const std::wstring& url,
