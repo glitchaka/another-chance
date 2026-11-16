@@ -5,6 +5,7 @@
 #include "util/Url.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -24,6 +25,18 @@ using js::Token;
 using js::TokenKind;
 
 using js::Value;
+std::uint32_t Uint32(double value) {
+    if(!std::isfinite(value) || value==0) return 0;
+    double bits=std::fmod(std::trunc(value),4294967296.0);
+    if(bits<0) bits+=4294967296.0;
+    return static_cast<std::uint32_t>(bits);
+}
+std::int32_t Int32(double value) {
+    const std::uint32_t bits=Uint32(value);
+    if(bits<=2147483647u) return static_cast<std::int32_t>(bits);
+    return static_cast<std::int32_t>(
+        static_cast<std::int64_t>(bits)-4294967296LL);
+}
 Node* FindTag(Node* root,std::string_view tag) {
     if(!root) return nullptr;
     if(root->type==Node::Type::Element && root->tag==tag) return root;
@@ -386,6 +399,7 @@ class Interpreter {
                 default: return {Value::Str("object"),{}};
             }
         }
+        if(Match("~")) return {Value::Num(static_cast<double>(~Int32(Primary().value.Number()))),{}};
         if(Match("-")) return {Value::Num(-Primary().value.Number()),{}};
         if(Match("+")) return {Value::Num(Primary().value.Number()),{}};
         if(Match("++")) {
@@ -974,73 +988,21 @@ class Interpreter {
         return result;
     }
     static int Priority(std::string_view s) {
-        if(s=="=" || s=="+=" || s=="-=") return 1;
+        if(s=="=" || s=="+=" || s=="-=" || s=="*=" ||
+           s=="/=" || s=="%=" || s=="&=" || s=="|=" ||
+           s=="^=" || s=="<<=" || s==">>=" || s==">>>=") return 1;
         if(s=="||" || s=="??") return 2;
         if(s=="&&") return 3;
-        if(s=="==" || s=="===" || s=="!=" || s=="!==") return 4;
-        if(s=="<" || s==">" || s=="<=" || s==">=") return 5;
-        if(s=="+" || s=="-") return 6;
-        if(s=="*" || s=="/" || s=="%") return 7;
+        if(s=="|") return 4;
+        if(s=="^") return 5;
+        if(s=="&") return 6;
+        if(s=="==" || s=="===" || s=="!=" || s=="!==") return 7;
+        if(s=="<" || s==">" || s=="<=" || s==">=") return 8;
+        if(s=="<<" || s==">>" || s==">>>") return 9;
+        if(s=="+" || s=="-") return 10;
+        if(s=="*" || s=="/" || s=="%") return 11;
+        if(s=="**") return 12;
         return -1;
-    }
-    void SkipOperand(int precedence) {
-        unsigned parens=0,brackets=0,braces=0;
-        while(Peek().kind!=TokenKind::End) {
-            const auto& token=Peek().text;
-            if(!parens && !brackets && !braces) {
-                if(token==";" || token=="," || token==")" ||
-                   token=="]" || token=="}" || token==":" || token=="?")
-                    return;
-                const int rank=Priority(token);
-                if(rank>=0 && rank<precedence) return;
-            }
-            if(token=="(") ++parens;
-            else if(token=="[") ++brackets;
-            else if(token=="{") ++braces;
-            else if(token==")") {
-                if(!parens) return;
-                --parens;
-            } else if(token=="]") {
-                if(!brackets) return;
-                --brackets;
-            } else if(token=="}") {
-                if(!braces) return;
-                --braces;
-            }
-            ++pos_;
-        }
-    }
-    // Skips unevaluated branches of the conditional operator without running
-    // their side effects. Nested delimiters and nested ternaries are handled.
-    void SkipConditionalBranch(bool untilColon) {
-        unsigned parens=0,brackets=0,braces=0,ternaries=0;
-        while(Peek().kind!=TokenKind::End) {
-            const auto& token=Peek().text;
-            if(!parens && !brackets && !braces) {
-                if(token=="?") ++ternaries;
-                else if(token==":") {
-                    if(ternaries) --ternaries;
-                    else if(untilColon) return;
-                }
-                if(!untilColon && !ternaries &&
-                   (token==";" || token=="," || token==")" ||
-                    token=="]" || token=="}" || token==":")) return;
-            }
-            if(token=="(") ++parens;
-            else if(token=="[") ++brackets;
-            else if(token=="{") ++braces;
-            else if(token==")") {
-                if(!parens) return;
-                --parens;
-            } else if(token=="]") {
-                if(!brackets) return;
-                --brackets;
-            } else if(token=="}") {
-                if(!braces) return;
-                --braces;
-            }
-            ++pos_;
-        }
     }
     Result Expression(int min=1) {
         auto left=Postfix();
@@ -1067,6 +1029,19 @@ class Interpreter {
                 if(op=="+=") value=(a.kind==Value::Kind::Text||b.kind==Value::Kind::Text)
                     ?Value::Str(a.String()+b.String()):Value::Num(a.Number()+b.Number());
                 else if(op=="-=") value=Value::Num(a.Number()-b.Number());
+                else if(op=="*=") value=Value::Num(a.Number()*b.Number());
+                else if(op=="/=") value=Value::Num(a.Number()/b.Number());
+                else if(op=="%=") value=Value::Num(std::fmod(a.Number(),b.Number()));
+                else if(op=="&=") value=Value::Num(Int32(a.Number()) & Int32(b.Number()));
+                else if(op=="|=") value=Value::Num(Int32(a.Number()) | Int32(b.Number()));
+                else if(op=="^=") value=Value::Num(Int32(a.Number()) ^ Int32(b.Number()));
+                else if(op=="<<=") value=Value::Num(
+                    static_cast<std::int32_t>(
+                        Uint32(a.Number()) << (Uint32(b.Number())&31)));
+                else if(op==">>=") value=Value::Num(
+                    Int32(a.Number()) >> (Uint32(b.Number())&31));
+                else if(op==">>>=") value=Value::Num(
+                    Uint32(a.Number()) >> (Uint32(b.Number())&31));
                 Write(left,value);left={value,{}};continue;
             }
             if(op=="+") left.value=(a.kind==Value::Kind::Text||b.kind==Value::Kind::Text)
@@ -1075,6 +1050,17 @@ class Interpreter {
             else if(op=="*") left.value=Value::Num(a.Number()*b.Number());
             else if(op=="/") left.value=Value::Num(a.Number()/b.Number());
             else if(op=="%") left.value=Value::Num(std::fmod(a.Number(),b.Number()));
+            else if(op=="**") left.value=Value::Num(std::pow(a.Number(),b.Number()));
+            else if(op=="&") left.value=Value::Num(Int32(a.Number()) & Int32(b.Number()));
+            else if(op=="|") left.value=Value::Num(Int32(a.Number()) | Int32(b.Number()));
+            else if(op=="^") left.value=Value::Num(Int32(a.Number()) ^ Int32(b.Number()));
+            else if(op=="<<") left.value=Value::Num(
+                static_cast<std::int32_t>(
+                    Uint32(a.Number()) << (Uint32(b.Number())&31)));
+            else if(op==">>") left.value=Value::Num(
+                Int32(a.Number()) >> (Uint32(b.Number())&31));
+            else if(op==">>>") left.value=Value::Num(
+                Uint32(a.Number()) >> (Uint32(b.Number())&31));
             else if(op=="<") left.value=Value::Bool(a.Number()<b.Number());
             else if(op==">") left.value=Value::Bool(a.Number()>b.Number());
             else if(op=="<=") left.value=Value::Bool(a.Number()<=b.Number());
