@@ -1382,6 +1382,52 @@ class Interpreter {
         }
         if(Match("for")) {
             Expect("(");
+            if((Peek().text=="let" || Peek().text=="const" ||
+                Peek().text=="var") && pos_+2<tokens_.size() &&
+               tokens_[pos_+1].kind==TokenKind::Identifier &&
+               tokens_[pos_+2].text=="of") {
+                ++pos_;
+                const std::string binding=tokens_[pos_++].text;
+                Expect("of");
+                const auto iterable=Expression().value;
+                Expect(")");
+                std::vector<Value> values;
+                if(iterable.kind==Value::Kind::Array && iterable.array)
+                    values=*iterable.array;
+                else if(iterable.kind==Value::Kind::Text) {
+                    for(char c:iterable.text)
+                        values.push_back(Value::Str(std::string(1,c)));
+                } else throw std::runtime_error("for..of value not iterable");
+                if(values.size()>20000)
+                    throw std::runtime_error("for..of iteration limit");
+                const size_t body=pos_;
+                SkipStatement();
+                const size_t after=pos_;
+                const auto previous=vars_.find(binding);
+                const bool existed=previous!=vars_.end();
+                const Value oldValue=existed?previous->second:Value{};
+                ++loopDepth_;
+                try {
+                    for(const auto& value:values) {
+                        Tick();
+                        vars_[binding]=value;
+                        pos_=body;
+                        try {Statement();}
+                        catch(const ContinueSignal&) {continue;}
+                        catch(const BreakSignal&) {break;}
+                    }
+                } catch(...) {
+                    --loopDepth_;
+                    if(existed) vars_[binding]=oldValue;
+                    else vars_.erase(binding);
+                    throw;
+                }
+                --loopDepth_;
+                if(existed) vars_[binding]=oldValue;
+                else vars_.erase(binding);
+                pos_=after;
+                return;
+            }
             if(!Match(";")) Statement();
             const size_t test=pos_;
             while(Peek().text!=";" && Peek().kind!=TokenKind::End) ++pos_;
