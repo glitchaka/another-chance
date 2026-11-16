@@ -79,6 +79,14 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("array-methods",
+             "const list=[3,6,9];"
+             "const more=list.concat([12,15]);"
+             "const middle=more.slice(1,4);"
+             "document.getElementById('result').textContent="
+             "middle.join('-')+'/'+String(more.includes(12))+'/'+"
+             "String(more.indexOf(9))+'/'+String(more.at(-1));",
+             "6-9-12/true/2/15");
         Test("string-methods",
              "const parts='  RED,Blue,Green  '.trim().toLowerCase().split(',');"
              "const chosen=parts[1].slice(0,2).toUpperCase();"
