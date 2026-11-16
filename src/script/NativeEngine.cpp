@@ -103,9 +103,13 @@ void SetNode(Document& doc,Node& node,const std::string& value,bool html,
         node.children.push_back(std::move(child));
     }
 }
+struct ScriptSource {
+    std::string url;
+    std::string source;
+};
 void CollectScripts(const Node& node,std::wstring_view base,
     const std::unordered_map<std::string,std::string>& external,
-    std::vector<std::string>& scripts,bool inert=false) {
+    std::vector<ScriptSource>& scripts,bool inert=false) {
     if(scripts.size()>=64) return;
     if(node.tag=="template" || node.tag=="noscript") inert=true;
     if(!inert && node.tag=="script") {
@@ -115,12 +119,12 @@ void CollectScripts(const Node& node,std::wstring_view base,
             if(src.empty()) {
                 for(auto& ch:node.children)
                     if(ch->type==Node::Type::Text && ch->text.size()<1024*1024)
-                        scripts.push_back(ch->text);
+                        scripts.push_back({"<inline>",ch->text});
             } else {
                 const auto url=ac::url::Resolve(base,ac::url::ToWide(src));
                 auto it=external.find(ac::url::ToUtf8(url));
                 if(it!=external.end() && it->second.size()<1024*1024)
-                    scripts.push_back(it->second);
+                    scripts.push_back({ac::url::ToUtf8(url),it->second});
             }
         }
     }
@@ -2110,12 +2114,16 @@ Execution ExecuteNative(Document& document,std::wstring_view baseUrl,
     Execution report;
     if(!document.root) return report;
     report.engineReady=true;
-    std::vector<std::string> scripts;
+    std::vector<ScriptSource> scripts;
     CollectScripts(*document.root,baseUrl,external,scripts);
     Interpreter interpreter(document,baseUrl,report);
-    for(const auto& source:scripts) {
+    for(const auto& script:scripts) {
         ++report.scripts;
-        if(!interpreter.Run(source)) ++report.unsupported;
+        if(!interpreter.Run(script.source)) {
+            ++report.unsupported;
+            if(!report.lastError.empty() && !report.lastError.starts_with("Script "))
+                report.lastError="Script "+script.url+": "+report.lastError;
+        }
         if(!report.navigation.empty()) break;
     }
     if(report.navigation.empty()) interpreter.FlushReadyCallbacks();
