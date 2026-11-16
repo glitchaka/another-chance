@@ -178,7 +178,21 @@ void Sheet::Parse(std::string_view css, int viewportWidth) {
     visit = [&](size_t start, size_t limit) {
         size_t pos = start;
         while (pos < limit && rules_.size() < 5000) {
+            // Top-level CSS at-rules such as @charset, @import and @namespace
+            // end with a semicolon instead of a declaration block. They must
+            // not be concatenated with the selector of the next rule.
             const size_t opening = cleaned.find('{', pos);
+            const size_t terminator = cleaned.find(';', pos);
+            if (terminator != std::string::npos &&
+                terminator < limit &&
+                (opening == std::string::npos || terminator < opening)) {
+                const std::string statement = Lower(Trim(
+                    std::string_view(cleaned).substr(pos, terminator - pos)));
+                if (statement.starts_with("@")) {
+                    pos = terminator + 1;
+                    continue;
+                }
+            }
             if (opening == std::string::npos || opening >= limit) break;
             int depth = 1;
             size_t close = opening + 1;
