@@ -385,42 +385,97 @@ void Sheet::Apply(Computed& style, std::string_view rawKey,
 namespace {
 // Limited, original CSS selector implementation: tag, class, id,
 // descendant and direct-child combinators (not pseudoclasses).
-bool MatchesSimple(const html::Node& node, std::string_view selector) {
-    if (node.type != html::Node::Type::Element) return false;
-    if (selector == ":root") return node.tag == "html";
-    if (selector.ends_with(":root")) {
-        const auto prefix = selector.substr(0, selector.size() - 5);
-        return node.tag == "html" && (prefix == "html" || prefix == "*");
-    }
-    if (selector.empty() || selector.find_first_of("[:+~") != std::string_view::npos)
-        return false;
+bool MatchesSimple(const html::Node& node, std::string_view selector,
+                   unsigned recursion = 0) {
+    if (node.type != html::Node::Type::Element || recursion > 8) return false;
+    selector = std::string_view(selector.data(), selector.size());
+    if (selector.empty()) return false;
     size_t pos = 0;
-    if (selector.front() == '*') {
-        ++pos;
-    } else {
-        while (pos < selector.size() && selector[pos] != '.' &&
-               selector[pos] != '#') ++pos;
-        if (pos && node.tag != selector.substr(0, pos)) return false;
+    if (selector[pos] == '*') ++pos;
+    else if (selector[pos] != '.' && selector[pos] != '#' && selector[pos] != ':') {
+        const size_t begin = pos;
+        while (pos < selector.size() &&
+               selector[pos] != '.' && selector[pos] != '#' &&
+               selector[pos] != ':' && selector[pos] != '[') ++pos;
+        if (node.tag != selector.substr(begin, pos - begin)) return false;
     }
     while (pos < selector.size()) {
-        const char sigil = selector[pos++];
-        if (sigil != '.' && sigil != '#') return false;
-        const size_t start = pos;
-        while (pos < selector.size() && selector[pos] != '.' &&
-               selector[pos] != '#') ++pos;
-        if (pos == start) return false;
-        const std::string value(selector.substr(start, pos - start));
-        if (sigil == '#') {
-            if (node.Attribute("id") != value) return false;
-        } else {
-            std::istringstream tokens(node.Attribute("class"));
-            std::string token;
-            bool found = false;
-            while (tokens >> token) {
-                if (token == value) { found = true; break; }
+        const char mark = selector[pos++];
+        if (mark == '.' || mark == '#') {
+            const size_t begin = pos;
+            while (pos < selector.size() &&
+                   selector[pos] != '.' && selector[pos] != '#' &&
+                   selector[pos] != ':' && selector[pos] != '[') ++pos;
+            if (begin == pos) return false;
+            const auto value = selector.substr(begin, pos - begin);
+            if (mark == '#') {
+                if (node.Attribute("id") != value) return false;
+            } else {
+                std::istringstream tokens(node.Attribute("class"));
+                std::string token;
+                bool found = false;
+                while (tokens >> token)
+                    if (token == value) { found = true; break; }
+                if (!found) return false;
             }
-            if (!found) return false;
-        }
+        } else if (mark == ':') {
+            const size_t nameBegin = pos;
+            while (pos < selector.size() &&
+                   (std::isalnum(static_cast<unsigned char>(selector[pos])) ||
+                    selector[pos] == '-')) ++pos;
+            const auto name = selector.substr(nameBegin, pos - nameBegin);
+            if (name == "root") {
+                if (node.tag != "html") return false;
+            } else if (name == "first-child" || name == "last-child" ||
+                       name == "only-child" || name == "empty") {
+                if (name == "empty") {
+                    for (const auto& child : node.children)
+                        if (child->type == html::Node::Type::Element ||
+                            (child->type == html::Node::Type::Text &&
+                             !child->text.empty())) return false;
+                } else {
+                    if (!node.parent) return false;
+                    const html::Node* first = nullptr;
+                    const html::Node* last = nullptr;
+                    for (const auto& child : node.parent->children) {
+                        if (child->type != html::Node::Type::Element) continue;
+                        if (!first) first = child.get();
+                        last = child.get();
+                    }
+                    if (name == "first-child" && first != &node) return false;
+                    if (name == "last-child" && last != &node) return false;
+                    if (name == "only-child" && (first != &node || last != &node))
+                        return false;
+                }
+            } else if (name == "is" || name == "where" || name == "not") {
+                if (pos >= selector.size() || selector[pos] != '(') return false;
+                const size_t open = ++pos;
+                unsigned depth = 1;
+                while (pos < selector.size() && depth) {
+                    if (selector[pos] == '(') ++depth;
+                    else if (selector[pos] == ')') --depth;
+                    if (depth) ++pos;
+                }
+                if (depth) return false;
+                const auto args = selector.substr(open, pos - open);
+                ++pos;
+                bool anyMatch = false;
+                size_t begin = 0;
+                unsigned argDepth = 0;
+                for (size_t i = 0; i <= args.size(); ++i) {
+                    if (i < args.size() && args[i] == '(') ++argDepth;
+                    else if (i < args.size() && args[i] == ')' && argDepth)
+                        --argDepth;
+                    if (i != args.size() && (args[i] != ',' || argDepth)) continue;
+                    const auto part = Trim(args.substr(begin, i - begin));
+                    if (!part.empty() && MatchesSimple(node, part, recursion + 1))
+                        anyMatch = true;
+                    begin = i + 1;
+                }
+                if ((name == "not" && anyMatch) ||
+                    (name != "not" && !anyMatch)) return false;
+            } else return false;
+        } else return false;
     }
     return true;
 }
@@ -442,9 +497,14 @@ SelectorParts SplitSelector(std::string_view value) {
             ++i; continue;
         }
         const size_t start = i;
-        while (i < value.size() &&
-               value[i] != '>' &&
-               !std::isspace(static_cast<unsigned char>(value[i]))) ++i;
+        unsigned depth = 0;
+        while (i < value.size()) {
+            if (value[i] == '(' || value[i] == '[') ++depth;
+            else if ((value[i] == ')' || value[i] == ']') && depth) --depth;
+            if (!depth && (value[i] == '>' ||
+                std::isspace(static_cast<unsigned char>(value[i])))) break;
+            ++i;
+        }
         if (start == i) { ++i; continue; }
         if (!parts.simple.empty()) parts.relation.push_back(relation);
         parts.simple.emplace_back(value.substr(start, i - start));
