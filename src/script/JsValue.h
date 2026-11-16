@@ -13,7 +13,7 @@
 
 namespace ac::script::js {
 struct Value {
-    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math, Json, RegExp };
+    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math, Json, RegExp, Style, ClassList };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
@@ -45,6 +45,12 @@ struct Value {
     static Value Num(double n) {Value v;v.kind=Kind::Number;v.number=n;return v;}
     static Value Str(std::string s) {Value v;v.kind=Kind::Text;v.text=std::move(s);return v;}
     static Value Bool(bool b) {Value v;v.kind=Kind::Boolean;v.number=b?1:0;return v;}
+    static Value NodeFacade(Kind kind,html::Node* n) {
+        Value v;
+        v.kind=kind;
+        v.element=n;
+        return v;
+    }
     static Value NodeValue(html::Node* n) {
         Value v;
         if(!n) {v.kind=Kind::Null;return v;}
