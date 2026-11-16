@@ -388,6 +388,9 @@ void BrowserWindow::StopWorker() {
         stopping_ = true;
         while (!pendingJobs_.IsEmpty()) delete pendingJobs_.RemoveFirst();
     }
+    // Invalidate the active navigation before cancelling its network request.
+    // Every subsequent expensive loading stage checks this generation.
+    newestRequest_.fetch_add(1);
     taskCondition_.notify_all();
     http_.Cancel();
     if (worker_.joinable()) worker_.join();
@@ -423,6 +426,7 @@ void BrowserWindow::WorkerLoop() {
         result->generation = job->generation;
         result->response = job->post ?
             http.Post(job->url,job->body) : http.Get(job->url);
+        if (job->generation != newestRequest_.load()) continue;
         // Bounded redirect chain for pages using <meta http-equiv="refresh">.
         // WinHTTP already handles ordinary HTTP Location redirects.
         std::unordered_set<std::wstring> refreshVisited{job->url};
@@ -482,6 +486,7 @@ void BrowserWindow::WorkerLoop() {
                 EscapeHtml(url::ToUtf8(result->response.error)) +
                 "</p><p>Comprueba la dirección y la conexión.</p></body></html>");
         }
+        if (job->generation != newestRequest_.load()) continue;
         std::vector<std::wstring> imageUrls;
         std::vector<std::wstring> cssUrls;
         std::unordered_set<std::wstring> knownImages;
@@ -577,6 +582,7 @@ void BrowserWindow::WorkerLoop() {
             result->document.embeddedCss += '\n';
             result->document.embeddedCss += css;
         }
+        if (job->generation != newestRequest_.load()) continue;
         if (!PostMessageW(hwnd_, kPageReady, 0,
                           reinterpret_cast<LPARAM>(result.get()))) {
             // Window has been destroyed; unique_ptr frees it.
