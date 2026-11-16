@@ -54,7 +54,7 @@ void SerializeNode(const html::Node& node,std::string& output,unsigned depth) {
     for(const auto& [key,value]:node.attributes) {
         output+=' ';
         output+=key;
-        output+="=\\\"";
+        output+="=\"";
         EscapeMarkup(value,output,true);
         output+='"';
     }
