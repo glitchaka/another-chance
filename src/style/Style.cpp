@@ -217,7 +217,26 @@ void Sheet::Parse(std::string_view css, int viewportWidth) {
                                                     braceEnd - opening - 1));
                 size_t selectorBegin = 0;
                 while (selectorBegin < heading.size() && rules_.size() < 5000) {
-                    const size_t comma = heading.find(',', selectorBegin);
+                    // Commas inside :is(), :where(), :not() or an
+                    // attribute value do not separate selector groups.
+                    size_t comma = std::string::npos;
+                    unsigned nesting = 0;
+                    char quoted = 0;
+                    for (size_t j = selectorBegin; j < heading.size(); ++j) {
+                        const char ch = heading[j];
+                        if (quoted) {
+                            if (ch == quoted) quoted = 0;
+                        } else if (ch == '"' || ch == '\\'') {
+                            quoted = ch;
+                        } else if (ch == '(' || ch == '[') {
+                            ++nesting;
+                        } else if ((ch == ')' || ch == ']') && nesting) {
+                            --nesting;
+                        } else if (ch == ',' && nesting == 0) {
+                            comma = j;
+                            break;
+                        }
+                    }
                     const size_t selectorEnd =
                         comma == std::string::npos ? heading.size() : comma;
                     std::string selector =
