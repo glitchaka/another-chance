@@ -140,6 +140,12 @@ int main() {
              "root.removeChild(old);"
              "root.textContent='reused';",
              "reused");
+        Test("innerhtml-serialization",
+             "const element=document.getElementById('result');"
+             "element.innerHTML='<strong>Markup</strong>';"
+             "const markup=element.innerHTML;"
+             "element.textContent=markup;",
+             "<strong>Markup</strong>");
         Test("dynamic-element-style",
              "const element=document.getElementById('result');"
              "element.style.display='none';"
