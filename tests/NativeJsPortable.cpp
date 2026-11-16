@@ -79,6 +79,10 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("for-of",
+             "let total=0;for(const value of [7,14,21]) {total+=value;}"
+             "document.getElementById('result').textContent=String(total);",
+             "42");
         Test("labels-and-comma",
              "let answer=40;"
              "outer:{answer++;break outer;answer=999;}"
