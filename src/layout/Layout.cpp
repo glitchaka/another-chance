@@ -99,6 +99,7 @@ void PageLayout::AppendWord(HDC dc, std::wstring_view word,
         }
         Item item;
         item.kind = Item::Kind::Text;
+        item.node = activeNode_;
         item.text = remaining.substr(0, chars);
         item.link = link;
         item.color = style.color;
@@ -148,6 +149,10 @@ void PageLayout::AppendText(HDC dc, std::wstring_view text,
 void PageLayout::Walk(HDC dc, const html::Node& node,
                       const style::Computed& inherited,
                       const std::wstring& parentLink) {
+    const auto* previousNode = activeNode_;
+    struct RestoreNode { const html::Node*& slot; const html::Node* previous;
+        ~RestoreNode() { slot = previous; } } restore{activeNode_, previousNode};
+    activeNode_ = &node;
     if (node.type == html::Node::Type::Text) {
         AppendText(dc, ac::url::ToWide(node.text), inherited, parentLink);
         return;
@@ -160,6 +165,7 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         if (x_ > left_ + listDepth_ * 22) NewLine();
         Item item;
         item.kind = Item::Kind::Rule;
+        item.node = &node;
         item.rect = {left_, y_ + 6, right_, y_ + 8};
         item.color = RGB(209, 214, 221);
         items_.push_back(std::move(item));
@@ -196,6 +202,7 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
             std::round(static_cast<double>(bitmap->height) * imageWidth / bitmap->width)));
         Item image;
         image.kind = Item::Kind::Image;
+        image.node = &node;
         image.imageUrl = source;
         image.link = link;
         int imageX = x_;
@@ -306,6 +313,7 @@ void PageLayout::Walk(HDC dc, const html::Node& node,
         if (computed.background != CLR_INVALID) {
             Item background;
             background.kind = Item::Kind::Background;
+            background.node = &node;
             background.color = computed.background;
             items_.push_back(std::move(background));
         }
@@ -408,6 +416,7 @@ void PageLayout::Reflow(HDC dc, const html::Document& document,
     items_.clear();
     controls_.clear();
     sheet_ = &sheet;
+    activeNode_ = nullptr;
     images_ = &images;
     pageUrl_ = pageUrl;
     left_ = 22;
@@ -486,6 +495,23 @@ void PageLayout::Draw(HDC dc, int top, int scroll, const RECT& viewport) {
         }
     }
     RestoreDC(dc, saved);
+}
+
+const html::Node* PageLayout::NodeAt(int x, int y, int top, int scroll) const {
+    const int contentY = y - top + scroll;
+    for (const auto& control : controls_) {
+        if (x >= control.rect.left && x < control.rect.right &&
+            contentY >= control.rect.top && contentY < control.rect.bottom)
+            return control.node;
+    }
+    for (auto it = items_.rbegin(); it != items_.rend(); ++it) {
+        if (!it->node) continue;
+        if (x >= it->rect.left && x < it->rect.right &&
+            contentY >= it->rect.top && contentY < it->rect.bottom)
+            return it->node->type == html::Node::Type::Text &&
+                it->node->parent ? it->node->parent : it->node;
+    }
+    return nullptr;
 }
 
 std::wstring PageLayout::LinkAt(int x, int y, int top, int scroll) const {
