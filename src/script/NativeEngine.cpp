@@ -573,9 +573,27 @@ class Interpreter {
                 } else result.value={};
                 if(!result.propertyObject) result.path.clear();
                 result.propertyNode=nullptr;
-            } else if(Match(".")) {
-                if(Peek().kind!=TokenKind::Identifier) throw std::runtime_error("Expected member name");
+            } else if(Peek().text=="." || Peek().text=="?.") {
+                const bool optional=Match("?.");
+                if(!optional) Expect(".");
+                if(Peek().kind!=TokenKind::Identifier)
+                    throw std::runtime_error("Expected member name");
                 const auto member=tokens_[pos_++].text;
+                if(optional &&
+                   (result.value.kind==Value::Kind::Null ||
+                    result.value.kind==Value::Kind::Undefined)) {
+                    if(Match("(")) {
+                        unsigned nesting=1;
+                        while(nesting>0 && Peek().kind!=TokenKind::End) {
+                            if(Match("(")) ++nesting;
+                            else if(Match(")")) --nesting;
+                            else ++pos_;
+                        }
+                        if(nesting) throw std::runtime_error("Unterminated optional call");
+                    }
+                    result={};
+                    continue;
+                }
                 if(Match("(")) {
                     std::vector<Value> args;
                     if(!Match(")")) {
