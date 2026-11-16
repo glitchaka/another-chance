@@ -4,6 +4,7 @@
 #include <string_view>
 
 namespace ac::script::dom {
+std::string SerializeChildren(const html::Node& node);
 std::string CssPropertyName(std::string_view javascriptName);
 std::string GetStyle(const html::Node& element,std::string_view property);
 void SetStyle(html::Node& element,std::string_view property,std::string_view value);
