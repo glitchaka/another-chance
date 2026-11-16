@@ -377,30 +377,29 @@ void BrowserWindow::WorkerLoop() {
             CollectStyleSheets(*result->document.root, result->response.url,
                                cssUrls, knownCss);
         }
-        if (!PostMessageW(hwnd_, kPageReady, 0,
-                          reinterpret_cast<LPARAM>(result.get()))) {
-            // Window has been destroyed; unique_ptr frees it.
-        } else {
-            result.release();
-        }
-
-        // External CSS is fetched after the initial page; it never executes scripts.
+        // The initial paint must use the document's author styles. Posting
+        // kPageReady before fetching CSS previously painted a temporary,
+        // often blank layout and showed the "cannot represent" error for
+        // every navigation before a later stylesheet message recovered it.
         for (const auto& cssUrl : cssUrls) {
             if (job->generation != newestRequest_.load()) break;
             {
                 std::lock_guard guard(taskMutex_);
                 if (stopping_) break;
             }
-            auto cssResponse = http.Get(cssUrl, 1024 * 1024);
+            const auto cssResponse = http.Get(cssUrl, 1024 * 1024);
             if (!cssResponse.Ok() || cssResponse.status >= 400 ||
                 cssResponse.body.empty()) continue;
-            auto loadedCss = std::make_unique<LoadedStyle>();
-            loadedCss->generation = job->generation;
-            loadedCss->css = std::move(cssResponse.body);
-            if (PostMessageW(hwnd_, kStyleReady, 0,
-                             reinterpret_cast<LPARAM>(loadedCss.get()))) {
-                loadedCss.release();
-            }
+            if (result->document.embeddedCss.size() + cssResponse.body.size()
+                > 8 * 1024 * 1024) break;
+            result->document.embeddedCss+='\n';
+            result->document.embeddedCss+=cssResponse.body;
+        }
+        if (!PostMessageW(hwnd_, kPageReady, 0,
+                          reinterpret_cast<LPARAM>(result.get()))) {
+            // Window has been destroyed; unique_ptr frees it.
+        } else {
+            result.release();
         }
 
         // Images arrive progressively, after text, without blocking first paint.
