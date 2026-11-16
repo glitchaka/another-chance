@@ -82,6 +82,7 @@ public:
     std::atomic<int> nextRequests{0};
     std::atomic<int> formRequests{0};
     std::atomic<int> postRequests{0};
+    std::atomic<int> slowRequests{0};
 
 private:
     SOCKET listener_ = INVALID_SOCKET;
@@ -124,7 +125,12 @@ private:
                 std::string body;
                 std::string type = "text/html; charset=utf-8";
                 std::string extraHeaders;
-                if (request.find("GET /cookie-start ") != std::string::npos) {
+                if (request.find("GET /slow-close ") != std::string::npos) {
+                    ++slowRequests;
+                    // Keep the synchronous read pending while the user closes.
+                    Sleep(5000);
+                    body = "<html><body>Should not be needed</body></html>";
+                } else if (request.find("GET /cookie-start ") != std::string::npos) {
                     extraHeaders = "Set-Cookie: ac_test=kept; Path=/; HttpOnly\r\n";
                     body = "<html><body>cookie established</body></html>";
                 } else if (request.find("GET /cookie-check ") != std::string::npos) {
@@ -283,6 +289,10 @@ public:
         wchar_t status[1024]{};
         GetWindowTextW(label, status, 1024);
         return std::wstring_view(status).find(L"HTTP 200") != std::wstring_view::npos;
+    }
+    void Close() const {
+        if (window_ && IsWindow(window_))
+            PostMessageW(window_, WM_CLOSE, 0, 0);
     }
     bool IsAlive() const {
         return WaitForSingleObject(process_.hProcess, 0) == WAIT_TIMEOUT;
@@ -805,6 +815,17 @@ int wmain(int argc, wchar_t** argv) {
             }, 20000), "External JavaScript resource did not produce native DOM");
             CaptureScreenshot(scripted.Window(), "AnotherChance-external-dom.bmp");
             std::cout << "PASS: external script resource generated visible DOM\n";
+        }
+        {
+            BrowserProcess closing(argv[1],
+                L"http://127.0.0.1:" + std::to_wstring(server.Port()) +
+                L"/slow-close");
+            Check(Until([&] { return server.slowRequests.load() > 0; }, 5000),
+                  "Slow network request did not start");
+            closing.Close();
+            Check(Until([&] { return !closing.IsAlive(); }, 3000),
+                  "Closing browser left the Windows process alive during HTTP read");
+            std::cout << "PASS: closing during a stalled HTTP response exits process\n";
         }
         return 0;
     } catch (const std::exception& error) {
