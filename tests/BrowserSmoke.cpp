@@ -411,12 +411,22 @@ int wmain(int argc, wchar_t** argv) {
                 const wchar_t* url;
                 const wchar_t* name;
                 const char* screenshot;
+                const char* htmlCapture;
+                bool requiresInput;
             };
             const Site sites[] = {
+                {L"https://example.org/",
+                 L"Example", "AnotherChance-live-example.bmp",
+                 "AnotherChance-live-example.html", false},
+                {L"https://info.cern.ch/",
+                 L"CERN", "AnotherChance-live-cern.bmp",
+                 "AnotherChance-live-cern.html", false},
                 {L"https://www.google.com/search?q=google",
-                 L"Google", "AnotherChance-live-google.bmp"},
+                 L"Google", "AnotherChance-live-google.bmp",
+                 "AnotherChance-live-google.html", true},
                 {L"https://archive.org/",
-                 L"Archive", "AnotherChance-live-archive.bmp"}
+                 L"Archive", "AnotherChance-live-archive.bmp",
+                 "AnotherChance-live-archive.html", true}
             };
             bool allPassed = true;
             for (const auto& site : sites) {
@@ -424,9 +434,7 @@ int wmain(int argc, wchar_t** argv) {
                 // tell us whether the server sent a JS shell or static HTML.
                 // This diagnostic runs only with --live, not in production.
                 const auto response = ac::net::HttpClient{}.Get(site.url);
-                const std::string file = std::wstring_view(site.name) == L"Google" ?
-                    "AnotherChance-live-google.html" :
-                    "AnotherChance-live-archive.html";
+                const std::string file = site.htmlCapture;
                 {
                     std::ofstream capture(file,std::ios::binary);
                     capture.write(response.body.data(),
@@ -466,7 +474,7 @@ int wmain(int argc, wchar_t** argv) {
                 const bool interactive = pageField != nullptr &&
                     IsWindowVisible(pageField) != FALSE;
                 const bool success = completed && browser.HasHttp200() &&
-                    visible && interactive;
+                    visible && (!site.requiresInput || interactive);
                 std::wcout << L"LIVE [" << site.name << L"]"
                            << L" completed=" << completed
                            << L" HTTP200=" << browser.HasHttp200()
