@@ -2,6 +2,7 @@
 #include "script/JsLexer.h"
 #include "script/JsValue.h"
 #include "script/JsJson.h"
+#include "script/DomProperties.h"
 #include "util/Url.h"
 #include <algorithm>
 #include <cctype>
@@ -232,7 +233,23 @@ class Interpreter {
         if(base.kind==Value::Kind::Text && name=="length") return Value::Num(base.text.size());
         if(base.kind==Value::Kind::Array && base.array && name=="length")
             return Value::Num(base.array->size());
+        if(base.kind==Value::Kind::Style && base.element) {
+            if(name=="cssText") return Value::Str(base.element->Attribute("style"));
+            return Value::Str(dom::GetStyle(*base.element,name));
+        }
+        if(base.kind==Value::Kind::ClassList && base.element) {
+            if(name=="value") return Value::Str(base.element->Attribute("class"));
+            if(name=="length") {
+                std::istringstream input(base.element->Attribute("class"));
+                std::string token;
+                size_t count=0;
+                while(input>>token) ++count;
+                return Value::Num(count);
+            }
+        }
         if(base.kind==Value::Kind::Element && base.element) {
+            if(name=="style") return Value::NodeFacade(Value::Kind::Style,base.element);
+            if(name=="classList") return Value::NodeFacade(Value::Kind::ClassList,base.element);
             if(name=="id" || name=="value" || name=="className")
                 return Value::Str(base.element->Attribute(name=="className"?"class":name));
             if(name=="innerHTML" || name=="innerText" || name=="textContent") {
@@ -257,6 +274,18 @@ class Interpreter {
             const auto delimiter=target.path.rfind('|');
             if(delimiter==std::string::npos) throw std::runtime_error("Invalid element property");
             const auto member=target.path.substr(delimiter+1);
+            if(target.path.starts_with("style|")) {
+                if(member=="cssText")
+                    target.propertyNode->attributes["style"]=value.String();
+                else dom::SetStyle(*target.propertyNode,member,value.String());
+                ++stats_.operations;
+                return;
+            }
+            if(target.path.starts_with("classList|") && member=="value") {
+                target.propertyNode->attributes["class"]=value.String();
+                ++stats_.operations;
+                return;
+            }
             if(member=="innerHTML" || member=="textContent" || member=="innerText") {
                 SetNode(doc_,*target.propertyNode,value.String(),member=="innerHTML");
                 ++stats_.operations;
@@ -760,7 +789,52 @@ class Interpreter {
                         do {args.push_back(Expression(2).value);} while(Match(","));
                         Expect(")");
                     }
-                    if((result.value.kind==Value::Kind::Document ||
+                    if(result.value.kind==Value::Kind::Style &&
+                       result.value.element &&
+                       (member=="setProperty" || member=="getPropertyValue" ||
+                        member=="removeProperty")) {
+                        const std::string key=args.empty()?"":args[0].String();
+                        const std::string old=dom::GetStyle(*result.value.element,key);
+                        if(member=="setProperty") {
+                            dom::SetStyle(*result.value.element,key,
+                                args.size()>1?args[1].String():"");
+                            ++stats_.operations;
+                            result={};
+                        } else if(member=="removeProperty") {
+                            dom::SetStyle(*result.value.element,key,"");
+                            ++stats_.operations;
+                            result={Value::Str(old),{}};
+                        } else result={Value::Str(old),{}};
+                    } else if(result.value.kind==Value::Kind::ClassList &&
+                              result.value.element &&
+                              (member=="add" || member=="remove" ||
+                               member=="toggle" || member=="contains" ||
+                               member=="replace")) {
+                        auto* element=result.value.element;
+                        const auto key=args.empty()?"":args[0].String();
+                        if(member=="contains") {
+                            result={Value::Bool(dom::ContainsClass(*element,key)),{}};
+                        } else if(member=="toggle") {
+                            if(args.size()>1) {
+                                dom::SetClass(*element,key,args[1].Truth());
+                                result={Value::Bool(args[1].Truth()),{}};
+                            } else result={Value::Bool(dom::ToggleClass(*element,key)),{}};
+                            ++stats_.operations;
+                        } else if(member=="replace") {
+                            const bool exists=dom::ContainsClass(*element,key);
+                            if(exists && args.size()>1) {
+                                dom::SetClass(*element,key,false);
+                                dom::SetClass(*element,args[1].String(),true);
+                                ++stats_.operations;
+                            }
+                            result={Value::Bool(exists),{}};
+                        } else {
+                            for(const auto& arg:args)
+                                dom::SetClass(*element,arg.String(),member=="add");
+                            ++stats_.operations;
+                            result={};
+                        }
+                    } else if((result.value.kind==Value::Kind::Document ||
                         result.value.kind==Value::Kind::Window ||
                         result.value.kind==Value::Kind::Element) &&
                        (member=="addEventListener" || member=="removeEventListener")) {
@@ -1314,6 +1388,12 @@ class Interpreter {
                     }
                     else if(old.value.kind==Value::Kind::Element) {
                         result.path=old.path+"|"+member;
+                        result.propertyNode=old.value.element;
+                        result.propertyObject.reset();
+                    } else if(old.value.kind==Value::Kind::Style ||
+                              old.value.kind==Value::Kind::ClassList) {
+                        result.path=(old.value.kind==Value::Kind::Style
+                                      ?"style|":"classList|")+member;
                         result.propertyNode=old.value.element;
                         result.propertyObject.reset();
                     } else if(old.value.kind==Value::Kind::Object) {
