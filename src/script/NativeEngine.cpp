@@ -130,6 +130,7 @@ class Interpreter {
     struct LabelBreak { std::string label; };
     struct ContinueSignal {};
     unsigned loopDepth_=0;
+    unsigned switchDepth_=0;
     unsigned lambdaCounter_=0;
     unsigned callDepth_=0;
     std::shared_ptr<std::unordered_map<std::string,Value>> globalProperties_ =
@@ -1250,7 +1251,8 @@ class Interpreter {
                 (void)Match(";");
                 throw LabelBreak{label};
             }
-            if(!loopDepth_) throw std::runtime_error("break outside loop");
+            if(!loopDepth_ && !switchDepth_)
+                throw std::runtime_error("break outside loop or switch");
             (void)Match(";");
             throw BreakSignal{};
         }
@@ -1354,6 +1356,101 @@ class Interpreter {
                 SkipStatement();
                 if(Match("else")) Statement();
             }
+            return;
+        }
+        if(Match("switch")) {
+            Expect("(");
+            const auto discriminant=Expression().value;
+            Expect(")");
+            Expect("{");
+            struct CaseClause {
+                size_t label=0;
+                size_t body=0;
+                bool isDefault=false;
+            };
+            std::vector<CaseClause> clauses;
+            size_t scan=pos_;
+            unsigned braces=0;
+            size_t switchEnd=tokens_.size();
+            while(scan<tokens_.size() && tokens_[scan].kind!=TokenKind::End) {
+                const auto& current=tokens_[scan];
+                if(current.kind==TokenKind::Symbol && current.text=="{") {
+                    ++braces;
+                } else if(current.kind==TokenKind::Symbol && current.text=="}") {
+                    if(!braces) {switchEnd=scan;break;}
+                    --braces;
+                } else if(!braces && current.kind==TokenKind::Identifier &&
+                          (current.text=="case" || current.text=="default")) {
+                    CaseClause clause;
+                    clause.isDefault=current.text=="default";
+                    clause.label=scan+1;
+                    size_t separator=clause.label;
+                    unsigned nesting=0;
+                    while(separator<tokens_.size()) {
+                        const auto& token=tokens_[separator];
+                        if(token.kind==TokenKind::Symbol) {
+                            if(token.text=="(" || token.text=="[") ++nesting;
+                            else if(token.text==")" || token.text=="]") {
+                                if(nesting) --nesting;
+                            } else if(token.text==":" && nesting==0) break;
+                        }
+                        ++separator;
+                    }
+                    if(separator==tokens_.size())
+                        throw std::runtime_error("Unterminated JavaScript switch case");
+                    clause.body=separator+1;
+                    clauses.push_back(clause);
+                    scan=separator;
+                }
+                ++scan;
+            }
+            if(switchEnd==tokens_.size())
+                throw std::runtime_error("Unterminated JavaScript switch");
+            size_t chosen=clauses.size();
+            size_t fallback=clauses.size();
+            for(size_t i=0;i<clauses.size();++i) {
+                if(clauses[i].isDefault) {fallback=i;continue;}
+                pos_=clauses[i].label;
+                const auto candidate=Expression(2).value;
+                const bool equal=candidate.kind==discriminant.kind &&
+                    (candidate.kind==Value::Kind::Number ||
+                     candidate.kind==Value::Kind::Boolean
+                        ?candidate.number==discriminant.number
+                        :candidate.kind==Value::Kind::Text
+                            ?candidate.text==discriminant.text
+                            :candidate.kind==Value::Kind::Null ||
+                             candidate.kind==Value::Kind::Undefined
+                                ?true
+                                :candidate.kind==Value::Kind::Object
+                                    ?candidate.object==discriminant.object
+                                    :candidate.kind==Value::Kind::Array
+                                        ?candidate.array==discriminant.array
+                                        :candidate.element==discriminant.element);
+                if(equal) {chosen=i;break;}
+            }
+            if(chosen==clauses.size()) chosen=fallback;
+            ++switchDepth_;
+            try {
+                if(chosen<clauses.size()) {
+                    pos_=clauses[chosen].body;
+                    for(size_t i=chosen;i<clauses.size();++i) {
+                        const size_t end=i+1<clauses.size()
+                            ?clauses[i+1].label-1:switchEnd;
+                        while(pos_<end) {
+                            Tick();
+                            Statement();
+                        }
+                        if(i+1<clauses.size()) pos_=clauses[i+1].body;
+                    }
+                }
+            } catch(const BreakSignal&) {
+                // An unlabelled break exits the innermost switch.
+            } catch(...) {
+                --switchDepth_;
+                throw;
+            }
+            --switchDepth_;
+            pos_=switchEnd+1;
             return;
         }
         if(Match("while")) {
