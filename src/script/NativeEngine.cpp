@@ -1918,6 +1918,44 @@ class Interpreter {
             pos_=switchEnd+1;
             return;
         }
+        if(Match("do")) {
+            const size_t body=pos_;
+            SkipStatement();
+            const size_t endOfBody=pos_;
+            Expect("while");
+            Expect("(");
+            const size_t condition=pos_;
+            unsigned parens=0;
+            while(Peek().kind!=TokenKind::End) {
+                if(Peek().text=="(") ++parens;
+                else if(Peek().text==")") {
+                    if(!parens) break;
+                    --parens;
+                }
+                ++pos_;
+            }
+            Expect(")");
+            (void)Match(";");
+            const size_t after=pos_;
+            ++loopDepth_;
+            try {
+                for(unsigned count=0;count<20000;++count) {
+                    Tick();
+                    pos_=body;
+                    bool stopped=false;
+                    try {Statement();}
+                    catch(const ContinueSignal&) {}
+                    catch(const BreakSignal&) {stopped=true;}
+                    if(stopped) break;
+                    pos_=condition;
+                    if(!Expression().value.Truth()) break;
+                }
+            } catch(...) {--loopDepth_;throw;}
+            --loopDepth_;
+            pos_=after;
+            (void)endOfBody;
+            return;
+        }
         if(Match("while")) {
             Expect("(");
             const size_t condition=pos_;
