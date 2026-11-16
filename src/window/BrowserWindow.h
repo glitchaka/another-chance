@@ -36,6 +36,10 @@ public:
     static constexpr WORD kSearchGoogle = 120;
     static constexpr WORD kSearchBing = 121;
     static constexpr WORD kSearchDisabled = 122;
+    static constexpr WORD kInspect = 123;
+    static constexpr WORD kInspectMode = 124;
+    static constexpr WORD kOpenLink = 125;
+    static constexpr WORD kCopyLink = 126;
     static HWND Create(HINSTANCE instance, std::wstring initialUrl = {});
 
 private:
@@ -82,6 +86,10 @@ private:
     HWND address_ = nullptr;
     HWND go_ = nullptr;
     HWND status_ = nullptr;
+    HWND inspector_ = nullptr;
+    bool inspectMode_ = false;
+    std::wstring contextLink_;
+    const html::Node* inspectedNode_ = nullptr;
     HFONT chromeFont_ = nullptr;
     HFONT statusFont_ = nullptr;
     HBRUSH addressBrush_ = nullptr;
@@ -151,6 +159,9 @@ private:
     void ToggleBookmark();
     void OpenMenu();
     void OpenTabMenu();
+    void ShowContextMenu(POINT screen);
+    void Inspect(const html::Node* node);
+    void CopyLink();
     void MaximizeRestore();
     void Navigate(std::wstring address, bool recordHistory,
                   std::string body = {}, bool post = false);
