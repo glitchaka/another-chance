@@ -1194,10 +1194,15 @@ class Interpreter {
            pos_+1<tokens_.size() && tokens_[pos_+1].text==":") {
             const auto label=tokens_[pos_++].text;
             Expect(":");
+            const size_t start=pos_;
+            SkipStatement();
+            const size_t after=pos_;
+            pos_=start;
             try { Statement(); }
             catch(const LabelBreak& signal) {
                 if(signal.label!=label) throw;
             }
+            pos_=after;
             return;
         }
         if(Match("{")) {
