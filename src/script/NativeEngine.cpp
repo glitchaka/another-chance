@@ -127,6 +127,7 @@ class Interpreter {
     struct ReturnSignal { Value value; };
     struct ThrowSignal { Value value; };
     struct BreakSignal {};
+    struct LabelBreak { std::string label; };
     struct ContinueSignal {};
     unsigned loopDepth_=0;
     unsigned lambdaCounter_=0;
@@ -360,7 +361,7 @@ class Interpreter {
             if(valid && Match(")") && Peek().text=="=>")
                 return ArrowFunction(std::move(parameters));
             pos_=saved;
-            auto value=Expression();
+            auto value=Expression(0);
             Expect(")");
             return {value.value,{}};
         }
@@ -994,6 +995,7 @@ class Interpreter {
         return result;
     }
     static int Priority(std::string_view s) {
+        if(s==",") return 0;
         if(s=="=" || s=="+=" || s=="-=" || s=="*=" ||
            s=="/=" || s=="%=" || s=="&=" || s=="|=" ||
            s=="^=" || s=="<<=" || s==">>=" || s==">>>=") return 1;
@@ -1107,7 +1109,8 @@ class Interpreter {
                     Uint32(a.Number()) >> (Uint32(b.Number())&31));
                 Write(left,value);left={value,{}};continue;
             }
-            if(op=="+") left.value=(a.kind==Value::Kind::Text||b.kind==Value::Kind::Text)
+            if(op==",") left.value=b;
+            else if(op=="+") left.value=(a.kind==Value::Kind::Text||b.kind==Value::Kind::Text)
                 ?Value::Str(a.String()+b.String()):Value::Num(a.Number()+b.Number());
             else if(op=="-") left.value=Value::Num(a.Number()-b.Number());
             else if(op=="*") left.value=Value::Num(a.Number()*b.Number());
@@ -1187,6 +1190,16 @@ class Interpreter {
     void Statement() {
         Tick();
         if(Match(";")) return;
+        if(Peek().kind==TokenKind::Identifier &&
+           pos_+1<tokens_.size() && tokens_[pos_+1].text==":") {
+            const auto label=tokens_[pos_++].text;
+            Expect(":");
+            try { Statement(); }
+            catch(const LabelBreak& signal) {
+                if(signal.label!=label) throw;
+            }
+            return;
+        }
         if(Match("{")) {
             while(!Match("}")) {
                 if(Peek().kind==TokenKind::End) throw std::runtime_error("Unterminated JS block");
@@ -1227,6 +1240,11 @@ class Interpreter {
             return;
         }
         if(Match("break")) {
+            if(Peek().kind==TokenKind::Identifier) {
+                const auto label=tokens_[pos_++].text;
+                (void)Match(";");
+                throw LabelBreak{label};
+            }
             if(!loopDepth_) throw std::runtime_error("break outside loop");
             (void)Match(";");
             throw BreakSignal{};
