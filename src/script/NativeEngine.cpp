@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <exception>
 #include <iomanip>
+#include <iterator>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -107,6 +108,47 @@ struct ScriptSource {
     std::string url;
     std::string source;
 };
+void InsertAdjacent(Document& doc,Node& target,
+                    std::string_view position,const std::string& markup,
+                    bool textOnly=false) {
+    if(markup.size()>1024*1024)
+        throw std::runtime_error("Adjacent DOM insert exceeds size limit");
+    Node* destination=&target;
+    size_t index=0;
+    if(position=="afterbegin") index=0;
+    else if(position=="beforeend") index=target.children.size();
+    else if(position=="beforebegin" || position=="afterend") {
+        destination=target.parent;
+        if(!destination)
+            throw std::runtime_error("Adjacent DOM insert requires a parent");
+        auto& siblings=destination->children;
+        size_t offset=0;
+        while(offset<siblings.size() && siblings[offset].get()!=&target) ++offset;
+        if(offset==siblings.size())
+            throw std::runtime_error("Adjacent DOM insert target not in parent");
+        index=offset+(position=="afterend"?1:0);
+    } else {
+        throw std::runtime_error("Invalid insertAdjacentHTML position");
+    }
+    std::vector<std::unique_ptr<Node>> inserted;
+    if(textOnly) {
+        auto node=std::make_unique<Node>();
+        node->type=Node::Type::Text;
+        node->text=markup;
+        inserted.push_back(std::move(node));
+    } else {
+        auto fragment=html::Parse(markup);
+        doc.embeddedCss+="\n"+fragment.embeddedCss;
+        if(fragment.root) inserted=std::move(fragment.root->children);
+    }
+    if(destination->children.size()+inserted.size()>100000)
+        throw std::runtime_error("Adjacent DOM children limit");
+    for(auto& node:inserted) node->parent=destination;
+    auto& children=destination->children;
+    children.insert(children.begin()+static_cast<std::ptrdiff_t>(index),
+                    std::make_move_iterator(inserted.begin()),
+                    std::make_move_iterator(inserted.end()));
+}
 void CollectScripts(const Node& node,std::wstring_view base,
     const std::unordered_map<std::string,std::string>& external,
     std::vector<ScriptSource>& scripts,bool inert=false) {
@@ -1349,6 +1391,17 @@ class Interpreter {
                         if(!body) body=doc_.root.get();
                         for(auto& arg:args) SetNode(doc_,*body,arg.String(),true,true,&detached_);
                         ++stats_.operations;result={};
+                    } else if(result.value.kind==Value::Kind::Element &&
+                              result.value.element &&
+                              (member=="insertAdjacentHTML" ||
+                               member=="insertAdjacentText")) {
+                        if(args.size()<2)
+                            throw std::runtime_error("insertAdjacentHTML requires position and markup");
+                        InsertAdjacent(doc_,*result.value.element,
+                            args[0].String(),args[1].String(),
+                            member=="insertAdjacentText");
+                        ++stats_.operations;
+                        result={};
                     } else if(result.value.kind==Value::Kind::Element &&
                               result.value.element && member=="setAttribute") {
                         if(args.size()>=2) {
