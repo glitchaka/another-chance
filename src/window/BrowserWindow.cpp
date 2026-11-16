@@ -751,9 +751,9 @@ void BrowserWindow::OnStyleReady(LoadedStyle* raw) {
     document_->embeddedCss.append(style->css);
     sheet_.Parse(document_->embeddedCss);
     Reflow();
-    if (!layout_.HasVisibleContent()) {
-        SetStatus(L"Sin contenido representable (JS/CSS no admitido)");
-    }
+    // A stylesheet can finish asynchronously while another page is loading.
+    // Never overwrite the real HTTP/JavaScript diagnostic with a transient
+    // "cannot render" message from an intermediate layout pass.
     InvalidateContent();
 }
 
@@ -773,7 +773,7 @@ void BrowserWindow::DrawContent(HDC dc) {
     DeleteObject(paper);
     if (document_ && layout_.HasVisibleContent()) {
         layout_.Draw(dc, view.top, scrollY_, view);
-    } else if (document_ && !currentUrl_.empty()) {
+    } else if (document_ && !currentUrl_.empty() && !isLoading_) {
         // A successful HTTP response can still contain no renderable content
         // (for example, a JS-only application shell). Never display a silent
         // white screen that suggests the page finished rendering correctly.
