@@ -769,6 +769,82 @@ class Interpreter {
                         else if(member=="forEach") result={};
                         else result={Value::ArrayValue(std::move(mapped)),{}};
                     } else if(result.value.kind==Value::Kind::Array &&
+                              result.value.array &&
+                              (member=="includes" || member=="indexOf" ||
+                               member=="at" || member=="slice" ||
+                               member=="concat" || member=="reverse")) {
+                        const auto array=result.value.array;
+                        if(member=="includes" || member=="indexOf") {
+                            if(args.empty()) throw std::runtime_error("Array lookup missing argument");
+                            double found=-1;
+                            size_t index=0;
+                            if(args.size()>1 && std::isfinite(args[1].Number())) {
+                                const auto start=static_cast<long long>(args[1].Number());
+                                if(start<0) {
+                                    const auto relative=static_cast<long long>(array->size())+start;
+                                    index=relative>0?static_cast<size_t>(relative):0;
+                                } else index=static_cast<size_t>(start);
+                            }
+                            for(;index<array->size();++index) {
+                                const auto& item=(*array)[index];
+                                bool equal=item.kind==args.front().kind &&
+                                   (item.kind==Value::Kind::Number || item.kind==Value::Kind::Boolean
+                                       ? item.number==args.front().number
+                                       : item.kind==Value::Kind::Text
+                                           ? item.text==args.front().text
+                                           : item.kind==Value::Kind::Object
+                                               ? item.object==args.front().object
+                                               : item.kind==Value::Kind::Array
+                                                   ? item.array==args.front().array
+                                                   : item.kind==Value::Kind::Null ||
+                                                     item.kind==Value::Kind::Undefined);
+                                if(equal) {found=static_cast<double>(index);break;}
+                            }
+                            result=member=="includes"
+                               ? Result{Value::Bool(found>=0),{}}
+                               : Result{Value::Num(found),{}};
+                        } else if(member=="at") {
+                            const auto requested=args.empty()?0.0:args[0].Number();
+                            const auto count=static_cast<long long>(array->size());
+                            auto index=std::isfinite(requested)
+                                ?static_cast<long long>(requested):count;
+                            if(index<0) index+=count;
+                            result={index>=0 && index<count
+                                ?(*array)[static_cast<size_t>(index)]:Value{},{}};
+                        } else if(member=="reverse") {
+                            std::reverse(array->begin(),array->end());
+                            result={Value::ArrayValue(*array),{}};
+                        } else {
+                            std::vector<Value> output;
+                            if(member=="concat") {
+                                output=*array;
+                                for(const auto& addition:args) {
+                                    if(addition.kind==Value::Kind::Array && addition.array)
+                                        output.insert(output.end(),addition.array->begin(),addition.array->end());
+                                    else output.push_back(addition);
+                                }
+                            } else {
+                                const auto count=static_cast<long long>(array->size());
+                                auto offset=[&](size_t argument,long long fallback) {
+                                    if(args.size()<=argument) return fallback;
+                                    const double v=args[argument].Number();
+                                    if(std::isnan(v)) return 0LL;
+                                    if(v>=static_cast<double>(count)) return count;
+                                    if(v<=-static_cast<double>(count)) return 0LL;
+                                    auto index=static_cast<long long>(v);
+                                    if(index<0) index+=count;
+                                    return std::clamp(index,0LL,count);
+                                };
+                                const auto begin=offset(0,0);
+                                const auto end=offset(1,count);
+                                if(end>begin)
+                                    output.assign(array->begin()+begin,array->begin()+end);
+                            }
+                            if(output.size()>100000)
+                                throw std::runtime_error("Array result exceeds element limit");
+                            result={Value::ArrayValue(std::move(output)),{}};
+                        }
+                    } else if(result.value.kind==Value::Kind::Array &&
                               result.value.array && member=="push") {
                         for(const auto& argument:args) result.value.array->push_back(argument);
                         result={Value::Num(result.value.array->size()),{}};
