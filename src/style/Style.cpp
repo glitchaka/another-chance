@@ -455,7 +455,12 @@ bool MatchesSimple(const html::Node& node, std::string_view selector,
                      actual.compare(0,expected.size(),expected) == 0 &&
                      actual[expected.size()] == '-'); break;
                 case '^': matched = actual.starts_with(expected); break;
-                case '
+                case '$': matched = actual.ends_with(expected); break;
+                case '*': matched = actual.find(expected) != std::string::npos; break;
+                default: return false;
+            }
+            if (!matched) return false;
+        } else if (mark == ':') {
             const size_t nameBegin = pos;
             while (pos < selector.size() &&
                    (std::isalnum(static_cast<unsigned char>(selector[pos])) ||
