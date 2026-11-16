@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <memory>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -12,12 +13,24 @@
 
 namespace ac::script::js {
 struct Value {
-    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math, Json };
+    enum class Kind { Undefined, Null, Number, Text, Boolean, Element, Document, Location, Window, Array, Function, Object, Math, Json, RegExp };
     Kind kind=Kind::Undefined;
     double number=0;
     std::string text;
     html::Node* element=nullptr;
     std::shared_ptr<std::vector<Value>> array;
+    std::shared_ptr<std::regex> regexp;
+    bool regexpGlobal=false;
+    static Value RegExpValue(std::string pattern,std::string flags) {
+        Value result;
+        result.kind=Kind::RegExp;
+        result.regexpGlobal=flags.find('g')!=std::string::npos;
+        std::regex::flag_type options=std::regex::ECMAScript;
+        if(flags.find('i')!=std::string::npos) options|=std::regex::icase;
+        result.regexp=std::make_shared<std::regex>(pattern,options);
+        result.text="/"+std::move(pattern)+"/"+std::move(flags);
+        return result;
+    }
     std::shared_ptr<std::unordered_map<std::string,Value>> object;
     static Value ObjectValue(std::unordered_map<std::string,Value> props) {
         Value v;v.kind=Kind::Object;
@@ -39,7 +52,7 @@ struct Value {
     }
     static Value Special(Kind k) {Value v;v.kind=k;return v;}
     std::string String() const {
-        if(kind==Kind::Text) return text;
+        if(kind==Kind::Text || kind==Kind::RegExp) return text;
         if(kind==Kind::Boolean) return number?"true":"false";
         if(kind==Kind::Number) {
             if(std::isnan(number)) return "NaN";
