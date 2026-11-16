@@ -226,7 +226,7 @@ void Sheet::Parse(std::string_view css, int viewportWidth) {
                         const char ch = heading[j];
                         if (quoted) {
                             if (ch == quoted) quoted = 0;
-                        } else if (ch == '"' || ch == '\\'') {
+                        } else if (ch == '"' || ch == static_cast<char>(39)) {
                             quoted = ch;
                         } else if (ch == '(' || ch == '[') {
                             ++nesting;
