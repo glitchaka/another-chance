@@ -79,6 +79,12 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("labels-and-comma",
+             "let answer=40;"
+             "outer:{answer++;break outer;answer=999;}"
+             "const indirect=(0,eval);indirect('answer += 1');"
+             "document.getElementById('result').textContent=String(answer);",
+             "42");
         Test("bitwise",
              "let value=(15 & 3) + (7 ^ 2) + (4 | 1);"
              "value+=1; value<<=1;"
