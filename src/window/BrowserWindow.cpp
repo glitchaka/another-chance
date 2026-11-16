@@ -142,6 +142,117 @@ std::string EscapeHtml(const std::string& input) {
 }
 } // namespace
 
+void BrowserWindow::CopyLink() {
+    if (contextLink_.empty() || !OpenClipboard(hwnd_)) return;
+    EmptyClipboard();
+    const size_t bytes = (contextLink_.size() + 1) * sizeof(wchar_t);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (memory) {
+        void* target = GlobalLock(memory);
+        if (target) {
+            memcpy(target, contextLink_.c_str(), bytes);
+            GlobalUnlock(memory);
+            if (!SetClipboardData(CF_UNICODETEXT, memory)) GlobalFree(memory);
+        } else GlobalFree(memory);
+    }
+    CloseClipboard();
+}
+
+void BrowserWindow::Inspect(const html::Node* node) {
+    if (!document_ || !document_->root) return;
+    inspectedNode_ = node ? node : document_->root.get();
+    std::wstring output = L"ANOTHER CHANCE | Inspector DOM nativo\r\n";
+    output += L"URL: " + currentUrl_ + L"\r\n";
+    output += L"Elementos y atributos del documento cargado.\r\n\r\n";
+    const html::Node* element = inspectedNode_;
+    if (element->type == html::Node::Type::Text && element->parent)
+        element = element->parent;
+    if (element->type == html::Node::Type::Element) {
+        output += L"SELECCIONADO: <" + url::ToWide(element->tag) + L">\r\n";
+        for (const auto& [key, value] : element->attributes)
+            output += L"  " + url::ToWide(key) + L" = \"" +
+                      url::ToWide(value) + L"\"\r\n";
+        std::vector<const html::Node*> ancestors;
+        for (auto* cursor = element; cursor; cursor = cursor->parent)
+            ancestors.push_back(cursor);
+        style::Computed computed{};
+        for (auto it = ancestors.rbegin(); it != ancestors.rend(); ++it)
+            computed = sheet_.Compute(**it, computed);
+        output += L"\r\nESTILO CALCULADO\r\n";
+        output += L"  display: " + std::wstring(computed.hidden ? L"none" :
+                  computed.block ? L"block" : L"inline") + L"\r\n";
+        output += L"  font-size: " + std::to_wstring(computed.fontSize) + L"px\r\n";
+        output += L"  width: " + std::to_wstring(computed.widthPixels) + L"px\r\n";
+        output += L"  padding: " + std::to_wstring(computed.paddingTop) + L" " +
+                  std::to_wstring(computed.paddingRight) + L" " +
+                  std::to_wstring(computed.paddingBottom) + L" " +
+                  std::to_wstring(computed.paddingLeft) + L"\r\n";
+    }
+    output += L"\r\nARBOL DOM\r\n";
+    size_t count = 0;
+    std::function<void(const html::Node&,unsigned)> walk;
+    walk = [&](const html::Node& n,unsigned depth) {
+        if (++count > 5000 || depth > 50 || output.size() > 120000) return;
+        output.append(depth * 2, L' ');
+        if (&n == element) output += L"> ";
+        if (n.type == html::Node::Type::Text) {
+            std::wstring value = url::ToWide(n.text);
+            if (value.size() > 140) value.resize(140);
+            for (auto& c : value) if (c == L'\n' || c == L'\r') c = L' ';
+            output += L"#text " + value + L"\r\n";
+        } else {
+            output += L"<" + url::ToWide(n.tag);
+            for (const auto& [key,value] : n.attributes) {
+                if (output.size() > 120000) break;
+                output += L" " + url::ToWide(key) + L"=\"" +
+                          url::ToWide(value.substr(0,160)) + L"\"";
+            }
+            output += L">\r\n";
+            for (const auto& child : n.children) walk(*child,depth+1);
+        }
+    };
+    walk(*document_->root,0);
+    if (!inspector_ || !IsWindow(inspector_)) {
+        inspector_ = CreateWindowExW(WS_EX_APPWINDOW, L"EDIT",
+            L"", WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_VSCROLL |
+            ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
+            CW_USEDEFAULT, CW_USEDEFAULT, 780, 650,
+            nullptr, nullptr,
+            reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hwnd_,GWLP_HINSTANCE)),
+            nullptr);
+        if (inspector_) SendMessageW(inspector_, WM_SETFONT,
+            reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)),TRUE);
+    }
+    if (inspector_) {
+        SetWindowTextW(inspector_,output.c_str());
+        ShowWindow(inspector_,SW_SHOWNORMAL);
+        SetForegroundWindow(inspector_);
+    }
+}
+
+void BrowserWindow::ShowContextMenu(POINT screen) {
+    POINT point = screen;
+    ScreenToClient(hwnd_, &point);
+    const RECT view = ContentRect();
+    if (point.y < view.top || point.y >= view.bottom) return;
+    contextLink_ = layout_.LinkAt(point.x,point.y,view.top,scrollY_);
+    inspectedNode_ = layout_.NodeAt(point.x,point.y,view.top,scrollY_);
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    if (!contextLink_.empty()) {
+        AppendMenuW(menu,MF_STRING,kOpenLink,L"Abrir enlace");
+        AppendMenuW(menu,MF_STRING,kCopyLink,L"Copiar dirección del enlace");
+        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
+    }
+    AppendMenuW(menu,MF_STRING,kInspect,L"Inspeccionar elemento");
+    AppendMenuW(menu,MF_STRING | (inspectMode_ ? MF_CHECKED : 0),
+                kInspectMode,L"Seleccionar elemento (Ctrl+Mayús+C)");
+    const UINT command = TrackPopupMenu(menu,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON,screen.x,screen.y,0,hwnd_,nullptr);
+    DestroyMenu(menu);
+    if (command) SendMessageW(hwnd_,WM_COMMAND,MAKEWPARAM(command,0),0);
+}
+
 BrowserWindow::~BrowserWindow() {
     StopWorker();
     if (chromeFont_) DeleteObject(chromeFont_);
@@ -264,6 +375,8 @@ void BrowserWindow::OnCreate() {
 }
 
 void BrowserWindow::OnDestroy() {
+    if (inspector_ && IsWindow(inspector_)) DestroyWindow(inspector_);
+    inspector_ = nullptr;
     formControls_.Clear();
     StopWorker();
     PostQuitMessage(0);
@@ -1059,6 +1172,15 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 return 0;
             }
             switch (LOWORD(wparam)) {
+                case kInspect: Inspect(inspectedNode_); return 0;
+                case kInspectMode:
+                    inspectMode_ = !inspectMode_;
+                    SetStatus(inspectMode_ ? L"Inspector: haz clic en un elemento" : L"Inspector desactivado");
+                    return 0;
+                case kOpenLink:
+                    if (!contextLink_.empty()) Navigate(contextLink_,true);
+                    return 0;
+                case kCopyLink: CopyLink(); return 0;
                 case kBack: GoBack(); return 0;
                 case kForward: GoForward(); return 0;
                 case kReload: Reload(); return 0;
@@ -1092,6 +1214,15 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                     break;
             }
             break;
+        }
+        case WM_CONTEXTMENU: {
+            POINT screen{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+            if (screen.x == -1 && screen.y == -1) {
+                RECT bounds{}; GetWindowRect(hwnd_,&bounds);
+                screen = {bounds.left + 80,bounds.top + kToolbarHeight + 80};
+            }
+            ShowContextMenu(screen);
+            return 0;
         }
         case WM_MOUSEWHEEL: {
             // Preserve fractional wheel deltas from high-resolution devices.
@@ -1132,6 +1263,11 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
                 return 0;
             }
             const auto content = ContentRect();
+            if (inspectMode_ && y >= content.top && y < content.bottom) {
+                inspectMode_ = false;
+                Inspect(layout_.NodeAt(x,y,content.top,scrollY_));
+                return 0;
+            }
             if (y >= content.top && y < content.bottom && document_) {
                 const std::wstring link = layout_.LinkAt(x, y, content.top, scrollY_);
                 if (!link.empty()) Navigate(link, true);
