@@ -1985,14 +1985,29 @@ class Interpreter {
             if((Peek().text=="let" || Peek().text=="const" ||
                 Peek().text=="var") && pos_+2<tokens_.size() &&
                tokens_[pos_+1].kind==TokenKind::Identifier &&
-               tokens_[pos_+2].text=="of") {
+               (tokens_[pos_+2].text=="of" ||
+                tokens_[pos_+2].text=="in")) {
                 ++pos_;
                 const std::string binding=tokens_[pos_++].text;
-                Expect("of");
+                const bool enumerate=Match("in");
+                if(!enumerate) Expect("of");
                 const auto iterable=Expression().value;
                 Expect(")");
                 std::vector<Value> values;
-                if(iterable.kind==Value::Kind::Array && iterable.array)
+                if(enumerate) {
+                    if(iterable.kind==Value::Kind::Object && iterable.object) {
+                        for(const auto& [key,_]:*iterable.object)
+                            values.push_back(Value::Str(key));
+                    } else if(iterable.kind==Value::Kind::Array && iterable.array) {
+                        for(size_t index=0;index<iterable.array->size();++index)
+                            values.push_back(Value::Str(std::to_string(index)));
+                    } else if(iterable.kind==Value::Kind::Text) {
+                        for(size_t index=0;index<iterable.text.size();++index)
+                            values.push_back(Value::Str(std::to_string(index)));
+                    } else if(iterable.kind!=Value::Kind::Null &&
+                              iterable.kind!=Value::Kind::Undefined)
+                        throw std::runtime_error("for..in value not enumerable");
+                } else if(iterable.kind==Value::Kind::Array && iterable.array)
                     values=*iterable.array;
                 else if(iterable.kind==Value::Kind::Text) {
                     for(char c:iterable.text)
