@@ -113,6 +113,20 @@ int main() {
              "document.getElementById('result').textContent="
              "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
              "true/AB/3");
+        Test("dom-ready-events",
+             "document.addEventListener('DOMContentLoaded',()=>{"
+             "document.getElementById('result').textContent='ready';});",
+             "ready");
+        Test("scheduled-script",
+             "setTimeout(function(){"
+             "document.getElementById('result').textContent='later';},0);",
+             "later");
+        Test("cancelled-callback",
+             "const id=setTimeout(function(){"
+             "document.getElementById('result').textContent='wrong';},0);"
+             "clearTimeout(id);"
+             "document.getElementById('result').textContent='correct';",
+             "correct");
         Test("regexp-constructor",
              "const expression=new RegExp('[0-9]+');"
              "const matched='Answer 42'.match(expression);"
