@@ -422,9 +422,9 @@ class Interpreter {
             }
             return {Value::ArrayValue(std::move(elements)),{}};
         }
-        if(Match("!")) return {Value::Bool(!Primary().value.Truth()),{}};
+        if(Match("!")) return {Value::Bool(!Postfix().value.Truth()),{}};
         if(Match("typeof")) {
-            const auto value=Primary().value;
+            const auto value=Postfix().value;
             switch(value.kind) {
                 case Value::Kind::Undefined: return {Value::Str("undefined"),{}};
                 case Value::Kind::Number: return {Value::Str("number"),{}};
@@ -434,11 +434,11 @@ class Interpreter {
                 default: return {Value::Str("object"),{}};
             }
         }
-        if(Match("~")) return {Value::Num(static_cast<double>(~Int32(Primary().value.Number()))),{}};
-        if(Match("-")) return {Value::Num(-Primary().value.Number()),{}};
-        if(Match("+")) return {Value::Num(Primary().value.Number()),{}};
+        if(Match("~")) return {Value::Num(static_cast<double>(~Int32(Postfix().value.Number()))),{}};
+        if(Match("-")) return {Value::Num(-Postfix().value.Number()),{}};
+        if(Match("+")) return {Value::Num(Postfix().value.Number()),{}};
         if(Match("++")) {
-            auto r=Primary();auto v=Value::Num(r.value.Number()+1);Write(r,v);return {v,{}};
+            auto r=Postfix();auto v=Value::Num(r.value.Number()+1);Write(r,v);return {v,{}};
         }
         if(Peek().kind==TokenKind::Number) return {Value::Num(tokens_[pos_++].number),{}};
         if(Peek().kind==TokenKind::String) return {Value::Str(tokens_[pos_++].text),{}};
