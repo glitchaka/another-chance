@@ -103,8 +103,8 @@ std::vector<Token> Tokenize(std::string_view input) {
             continue;
         }
         bool matched=false;
-        for (auto op : {"===","!==",">>>","**=","=>","==","!=","<=",">=","&&","||","??",
-                        "++","--","+=","-=","*=","/=","**","?.","<<",">>","..."} ) {
+        for (auto op : {">>>=","===","!==",">>>","<<=",">>=","**=","=>","==","!=","<=",">=","&&","||","??",
+                        "++","--","+=","-=","*=","/=","%=","&=","|=","^=","**","?.","<<",">>","..."} ) {
             const std::string_view value(op);
             if (input.substr(i,value.size())==value) {
                 tokens.push_back({TokenKind::Symbol,std::string(value),0,i});
