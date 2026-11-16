@@ -220,6 +220,22 @@ void TestStyles() {
                      ".panel {color:#aabbcc;} }", 400);
     Check(responsive.Compute(*wrapper, parent).color ==
           RGB(0xaa,0xbb,0xcc), "mobile media query");
+    auto attributeDocument = ac::html::Parse(
+        "<form><input type='search' data-mode='instant' class='field primary'>"
+        "<input type='email'></form>");
+    const auto* attributeForm = Find(*attributeDocument.root, "form");
+    Check(attributeForm && attributeForm->children.size() == 2,
+          "attribute selector HTML fixture");
+    ac::style::Sheet attributes;
+    attributes.Parse("input[type='search'] {color:#123456;}"
+                     "input[data-mode^='ins'][class~='primary'] {font-weight:bold;}"
+                     "input[type='email'] {color:#abcdef;}");
+    const auto searchStyle = attributes.Compute(*attributeForm->children[0],parent);
+    const auto emailStyle = attributes.Compute(*attributeForm->children[1],parent);
+    Check(searchStyle.color == RGB(0x12,0x34,0x56) && searchStyle.bold,
+          "CSS attribute equality, prefix, and token selectors");
+    Check(emailStyle.color == RGB(0xab,0xcd,0xef) && !emailStyle.bold,
+          "attribute selectors do not bleed into other controls");
     // Modern author stylesheets routinely group selectors with :is(),
     // :where() and :not(). These must match without breaking on whitespace
     // inside functional pseudo-class arguments.
