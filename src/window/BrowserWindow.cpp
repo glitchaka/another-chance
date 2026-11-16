@@ -773,6 +773,7 @@ void BrowserWindow::DrawContent(HDC dc) {
     if (document_ && layout_.HasVisibleContent()) {
         layout_.Draw(dc, view.top, scrollY_, view);
     } else if (document_ && !currentUrl_.empty() && !isLoading_) {
+        ++renderFailurePaintCount_;
         // A successful HTTP response can still contain no renderable content
         // (for example, a JS-only application shell). Never display a silent
         // white screen that suggests the page finished rendering correctly.
@@ -938,6 +939,8 @@ LRESULT BrowserWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam)
             return static_cast<LRESULT>(activeTab_);
         case WM_APP + 45:
             return static_cast<LRESULT>(formControls_.Count());
+        case WM_APP + 46:
+            return static_cast<LRESULT>(renderFailurePaintCount_);
         case forms::NativeFormControls::kSubmitByEnter: {
             auto from = reinterpret_cast<HWND>(wparam);
             if (formControls_.Owns(from)) {
