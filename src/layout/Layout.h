@@ -23,6 +23,7 @@ public:
                 int viewportWidth);
     void Draw(HDC dc, int top, int scroll, const RECT& viewport);
     [[nodiscard]] std::wstring LinkAt(int x, int y, int top, int scroll) const;
+    [[nodiscard]] const html::Node* NodeAt(int x, int y, int top, int scroll) const;
     [[nodiscard]] int Height() const { return height_; }
     [[nodiscard]] bool HasVisibleContent() const;
 
@@ -45,6 +46,7 @@ private:
         std::wstring text;
         std::wstring link;
         std::wstring imageUrl;
+        const html::Node* node = nullptr;
         COLORREF color = RGB(40,40,40);
         int fontSize = 16;
         bool bold = false;
@@ -55,6 +57,7 @@ private:
     std::vector<Control> controls_;
     std::map<std::tuple<int,bool,bool,bool>, HFONT> fonts_;
     const style::Sheet* sheet_ = nullptr;
+    const html::Node* activeNode_ = nullptr;
     const image::Store* images_ = nullptr;
     std::wstring pageUrl_;
     int left_ = 22;
