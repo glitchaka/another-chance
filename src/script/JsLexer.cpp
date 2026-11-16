@@ -38,6 +38,48 @@ std::vector<Token> Tokenize(std::string_view input) {
             i = end + 2;
             continue;
         }
+        // A slash starts a regular-expression literal only where an expression
+        // may begin. Do not confuse division with regex delimiters, and do not
+        // tokenize braces contained in regex character classes as JS blocks.
+        if (c == '/') {
+            bool regexpAllowed=tokens.empty();
+            if(!tokens.empty()) {
+                const auto& previous=tokens.back();
+                if(previous.kind==TokenKind::Symbol) {
+                    regexpAllowed=previous.text!=")" && previous.text!="]" &&
+                                  previous.text!="}" && previous.text!="++" &&
+                                  previous.text!="--";
+                } else if(previous.kind==TokenKind::Identifier) {
+                    regexpAllowed=previous.text=="return" || previous.text=="throw" ||
+                                  previous.text=="case" || previous.text=="delete" ||
+                                  previous.text=="void" || previous.text=="typeof" ||
+                                  previous.text=="instanceof" || previous.text=="in" ||
+                                  previous.text=="of" || previous.text=="yield" ||
+                                  previous.text=="await" || previous.text=="new" ||
+                                  previous.text=="else" || previous.text=="do";
+                }
+            }
+            if(regexpAllowed) {
+                const size_t begin=i++;
+                bool charClass=false,escaped=false,terminated=false;
+                while(i<input.size() && input[i]!='\n' && input[i]!='\r') {
+                    const char ch=input[i++];
+                    if(escaped) {escaped=false;continue;}
+                    if(ch=='\\') {escaped=true;continue;}
+                    if(ch=='[') {charClass=true;continue;}
+                    if(ch==']') {charClass=false;continue;}
+                    if(ch=='/' && !charClass) {terminated=true;break;}
+                }
+                if(terminated) {
+                    while(i<input.size() &&
+                          std::isalpha(static_cast<unsigned char>(input[i]))) ++i;
+                    tokens.push_back({TokenKind::RegExp,
+                        std::string(input.substr(begin,i-begin)),0,begin});
+                    continue;
+                }
+                i=begin;
+            }
+        }
         const size_t start = i;
         if (Start(c)) {
             ++i;
