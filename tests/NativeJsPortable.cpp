@@ -79,6 +79,14 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("browser-intrinsics",
+             "const values=Array(3);"
+             "const letters=String.fromCharCode(65,66);"
+             "const valid=Array.isArray(values)&&!Array.isArray(letters);"
+             "const dice=Math.random();"
+             "document.getElementById('result').textContent="
+             "String(valid&&dice>=0&&dice<1)+'/'+letters+'/'+String(values.length);",
+             "true/AB/3");
         Test("switch-fallthrough",
              "let total=0;const key=2;"
              "switch(key){case 1: total=100;break;"
