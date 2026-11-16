@@ -28,6 +28,54 @@ void WriteClasses(html::Node& node,const std::vector<std::string>& classes) {
     node.attributes["class"]=std::move(value);
 }
 }
+namespace {
+void EscapeMarkup(std::string_view value,std::string& output,bool attribute) {
+    for(char c:value) {
+        if(c=='&') output+="&amp;";
+        else if(c=='<') output+="&lt;";
+        else if(c=='>') output+="&gt;";
+        else if(attribute && c=='"') output+="&quot;";
+        else output+=c;
+    }
+}
+void SerializeNode(const html::Node& node,std::string& output,unsigned depth) {
+    if(depth>128 || output.size()>4*1024*1024)
+        return;
+    if(node.type==html::Node::Type::Text) {
+        EscapeMarkup(node.text,output,false);
+        return;
+    }
+    if(node.tag=="document") {
+        for(const auto& child:node.children) SerializeNode(*child,output,depth+1);
+        return;
+    }
+    output+='<';
+    output+=node.tag;
+    for(const auto& [key,value]:node.attributes) {
+        output+=' ';
+        output+=key;
+        output+="=\\\"";
+        EscapeMarkup(value,output,true);
+        output+='"';
+    }
+    output+='>';
+    static constexpr std::string_view voidTags[]={
+        "area","base","br","col","embed","hr","img","input",
+        "link","meta","param","source","track","wbr"
+    };
+    for(const auto tag:voidTags) if(tag==node.tag) return;
+    for(const auto& child:node.children) SerializeNode(*child,output,depth+1);
+    output+="</";
+    output+=node.tag;
+    output+='>';
+}
+}
+std::string SerializeChildren(const html::Node& node) {
+    std::string result;
+    for(const auto& child:node.children)
+        SerializeNode(*child,result,0);
+    return result;
+}
 std::string CssPropertyName(std::string_view name) {
     std::string output;
     if(name.starts_with("--")) return std::string(name);
