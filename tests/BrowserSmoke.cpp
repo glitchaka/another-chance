@@ -448,6 +448,18 @@ int wmain(int argc, wchar_t** argv) {
                     }
                     return count;
                 };
+                if(std::wstring_view(site.name)==L"Example") {
+                    const auto script=ac::net::HttpClient{}.Get(
+                        L"https://example.org/s.js",1024*1024);
+                    if(script.Ok() && !script.body.empty()) {
+                        std::ofstream capture("AnotherChance-live-example-script.js",
+                                              std::ios::binary);
+                        capture.write(script.body.data(),
+                            static_cast<std::streamsize>(script.body.size()));
+                    }
+                    std::wcout<<L"EXAMPLE SCRIPT status="<<script.status
+                              <<L" bytes="<<script.body.size()<<L"\n";
+                }
                 std::wcout<<L"HTTP BODY ["<<site.name<<L"] status="
                           <<response.status<<L" bytes="<<response.body.size()
                           <<L" scriptTags="<<countTag("<script")
