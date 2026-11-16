@@ -79,6 +79,13 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("string-methods",
+             "const parts='  RED,Blue,Green  '.trim().toLowerCase().split(',');"
+             "const chosen=parts[1].slice(0,2).toUpperCase();"
+             "document.getElementById('result').textContent="
+             "chosen+'/'+String(parts[2].endsWith('green'))+'/'+"
+             "String(parts[0].startsWith('red'));",
+             "BL/true/true");
         Test("lexical-closure",
              "const make=()=>{let count=40;return ()=>{count++;return count;};};"
              "const next=make();"
