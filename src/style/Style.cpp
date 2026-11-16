@@ -392,7 +392,8 @@ bool MatchesSimple(const html::Node& node, std::string_view selector,
     if (selector.empty()) return false;
     size_t pos = 0;
     if (selector[pos] == '*') ++pos;
-    else if (selector[pos] != '.' && selector[pos] != '#' && selector[pos] != ':') {
+    else if (selector[pos] != '.' && selector[pos] != '#' &&
+             selector[pos] != ':' && selector[pos] != '[') {
         const size_t begin = pos;
         while (pos < selector.size() &&
                selector[pos] != '.' && selector[pos] != '#' &&
