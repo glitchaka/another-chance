@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <memory>
+#include <functional>
 #include <string>
 #include <utility>
 #include <unordered_set>
@@ -381,19 +382,86 @@ void BrowserWindow::WorkerLoop() {
         // kPageReady before fetching CSS previously painted a temporary,
         // often blank layout and showed the "cannot represent" error for
         // every navigation before a later stylesheet message recovered it.
-        for (const auto& cssUrl : cssUrls) {
-            if (job->generation != newestRequest_.load()) break;
+        // CSS imports participate in the cascade at the position where they
+        // appear. A missing import used to discard the site's base typography
+        // and layout styles even when the linked stylesheet was downloaded.
+        std::unordered_set<std::wstring> fetchedCss;
+        size_t cssRequests = 0;
+        std::function<std::string(const std::wstring&, unsigned)> loadCss;
+        loadCss = [&](const std::wstring& cssUrl, unsigned depth) -> std::string {
+            if (depth > 5 || ++cssRequests > 64 ||
+                job->generation != newestRequest_.load() ||
+                !fetchedCss.insert(cssUrl).second) return {};
             {
                 std::lock_guard guard(taskMutex_);
-                if (stopping_) break;
+                if (stopping_) return {};
             }
-            const auto cssResponse = http.Get(cssUrl, 1024 * 1024);
-            if (!cssResponse.Ok() || cssResponse.status >= 400 ||
-                cssResponse.body.empty()) continue;
-            if (result->document.embeddedCss.size() + cssResponse.body.size()
-                > 8 * 1024 * 1024) break;
-            result->document.embeddedCss+='\n';
-            result->document.embeddedCss+=cssResponse.body;
+            const auto response = http.Get(cssUrl, 1024 * 1024);
+            if (!response.Ok() || response.status >= 400 || response.body.empty())
+                return {};
+            const std::string& css = response.body;
+            std::string expanded;
+            size_t pos = 0;
+            while (pos < css.size()) {
+                const size_t at = css.find("@import", pos);
+                if (at == std::string::npos) {
+                    expanded.append(css, pos, css.size() - pos);
+                    break;
+                }
+                // Don't mistake an identifier suffix for an import rule.
+                if (at + 7 < css.size() &&
+                    (std::isalnum(static_cast<unsigned char>(css[at + 7])) ||
+                     css[at + 7] == '-')) {
+                    expanded.append(css, pos, at + 7 - pos);
+                    pos = at + 7;
+                    continue;
+                }
+                const size_t semicolon = css.find(';', at + 7);
+                if (semicolon == std::string::npos) {
+                    expanded.append(css, pos, css.size() - pos);
+                    break;
+                }
+                expanded.append(css, pos, at - pos);
+                const std::string directive = css.substr(at + 7,
+                                                          semicolon - at - 7);
+                size_t begin = directive.find_first_not_of(" \t\r\n");
+                std::string target;
+                if (begin != std::string::npos) {
+                    if (directive.compare(begin, 4, "url(") == 0) {
+                        begin += 4;
+                        const size_t end = directive.find(')', begin);
+                        if (end != std::string::npos)
+                            target = directive.substr(begin, end - begin);
+                    } else if (directive[begin] == '"' || directive[begin] == '\'') {
+                        const char quote = directive[begin++];
+                        const size_t end = directive.find(quote, begin);
+                        if (end != std::string::npos)
+                            target = directive.substr(begin, end - begin);
+                    }
+                }
+                if (!target.empty()) {
+                    const size_t first = target.find_first_not_of(" \t\r\n\'\"");
+                    const size_t last = target.find_last_not_of(" \t\r\n\'\"");
+                    if (first != std::string::npos) {
+                        const auto imported = url::Resolve(cssUrl,
+                            url::ToWide(target.substr(first, last - first + 1)));
+                        if (url::IsWeb(imported)) {
+                            expanded += loadCss(imported, depth + 1);
+                            expanded += '\n';
+                        }
+                    }
+                }
+                pos = semicolon + 1;
+            }
+            return expanded;
+        };
+        for (const auto& cssUrl : cssUrls) {
+            if (job->generation != newestRequest_.load()) break;
+            std::string css = loadCss(cssUrl, 0);
+            if (result->document.embeddedCss.size() + css.size() > 8 * 1024 * 1024)
+                break;
+            result->document.embeddedCss += '\n';
+            result->document.embeddedCss += css;
         }
         if (!PostMessageW(hwnd_, kPageReady, 0,
                           reinterpret_cast<LPARAM>(result.get()))) {
