@@ -79,6 +79,18 @@ int main() {
              "document.getElementById('result').textContent="
              "String(sum.call(null,19,23))+'/'+String(sum.apply(null,[19,23]));",
              "42/42");
+        Test("switch-fallthrough",
+             "let total=0;const key=2;"
+             "switch(key){case 1: total=100;break;"
+             "case 2: total=40;case 3: total+=2;break;"
+             "default: total=999;}"
+             "document.getElementById('result').textContent=String(total);",
+             "42");
+        Test("switch-default",
+             "let total=40;switch('missing'){case 'other':total=0;break;"
+             "default:total+=2;break;}"
+             "document.getElementById('result').textContent=String(total);",
+             "42");
         Test("for-of",
              "let total=0;for(const value of [7,14,21]) {total+=value;}"
              "document.getElementById('result').textContent=String(total);",
