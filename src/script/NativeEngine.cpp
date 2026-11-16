@@ -266,7 +266,9 @@ class Interpreter {
             if(name=="classList") return Value::NodeFacade(Value::Kind::ClassList,base.element);
             if(name=="id" || name=="value" || name=="className")
                 return Value::Str(base.element->Attribute(name=="className"?"class":name));
-            if(name=="innerHTML" || name=="innerText" || name=="textContent") {
+            if(name=="innerHTML")
+                return Value::Str(dom::SerializeChildren(*base.element));
+            if(name=="innerText" || name=="textContent") {
                 std::string text;ReadText(*base.element,text);return Value::Str(std::move(text));
             }
         }
