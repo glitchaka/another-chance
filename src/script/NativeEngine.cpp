@@ -365,7 +365,8 @@ class Interpreter {
             auto instance=Value::ObjectValue({});
             const auto returned=CallFunction(target.value,args,instance);
             return {returned.kind==Value::Kind::Object ||
-                    returned.kind==Value::Kind::Array?returned:instance,{}};
+                    returned.kind==Value::Kind::Array ||
+                    returned.kind==Value::Kind::RegExp?returned:instance,{}};
         }
         if(Match("function")) {
             std::string declaredName;
@@ -505,7 +506,8 @@ class Interpreter {
             if(name=="JSON") return {Value::Special(Value::Kind::Json),{}};
             if(name=="String" || name=="Number" || name=="Boolean" ||
                name=="parseInt" || name=="parseFloat" || name=="isNaN" ||
-               name=="eval" || name=="Array" || name=="Object") {
+               name=="eval" || name=="Array" || name=="Object" ||
+               name=="RegExp") {
                 auto builtin=Value::Special(Value::Kind::Function);
                 builtin.text="@builtin:"+name;
                 return {builtin,{}};
@@ -538,6 +540,15 @@ class Interpreter {
                 return Value::ArrayValue(std::vector<Value>(static_cast<size_t>(size)));
             }
             return Value::ArrayValue(args);
+        }
+        if(value.text=="@builtin:RegExp") {
+            if(first.kind==Value::Kind::RegExp && args.size()<2) return first;
+            try {
+                return Value::RegExpValue(args.empty()?"":first.String(),
+                    args.size()>1?args[1].String():"");
+            } catch(const std::regex_error&) {
+                throw std::runtime_error("Unsupported RegExp pattern");
+            }
         }
         if(value.text=="@builtin:Object") {
             if(!args.empty() && (first.kind==Value::Kind::Object ||
@@ -870,10 +881,47 @@ class Interpreter {
                         member=="endsWith" || member=="indexOf" ||
                         member=="slice" || member=="substring" ||
                         member=="trim" || member=="toLowerCase" ||
-                        member=="toUpperCase" || member=="split")) {
+                        member=="toUpperCase" || member=="split" ||
+                        member=="replace" || member=="match" ||
+                        member=="search")) {
                         const std::string input=result.value.text;
                         const std::string needle=args.empty()?"undefined":args[0].String();
-                        if(member=="includes") {
+                        if(member=="replace") {
+                            if(args.empty()) {
+                                result={Value::Str(input),{}};
+                            } else if(args[0].kind==Value::Kind::RegExp &&
+                                      args[0].regexp) {
+                                const auto replacement=args.size()>1?args[1].String():"undefined";
+                                const auto flags=args[0].regexpGlobal
+                                    ?std::regex_constants::format_default
+                                    :std::regex_constants::format_first_only;
+                                result={Value::Str(std::regex_replace(input,
+                                    *args[0].regexp,replacement,flags)),{}};
+                            } else {
+                                std::string changed=input;
+                                const auto found=changed.find(args[0].String());
+                                if(found!=std::string::npos)
+                                    changed.replace(found,args[0].String().size(),
+                                        args.size()>1?args[1].String():"undefined");
+                                result={Value::Str(std::move(changed)),{}};
+                            }
+                        } else if(member=="match" || member=="search") {
+                            const auto regexp=!args.empty() &&
+                                args[0].kind==Value::Kind::RegExp?args[0]:
+                                Value::RegExpValue(args.empty()?"":args[0].String(),"");
+                            std::smatch matches;
+                            const bool found=regexp.regexp &&
+                                std::regex_search(input,matches,*regexp.regexp);
+                            if(member=="search") result={
+                                Value::Num(found?static_cast<double>(matches.position()):-1),{}};
+                            else if(!found) result={
+                                Value::Special(Value::Kind::Null),{}};
+                            else {
+                                std::vector<Value> pieces;
+                                for(const auto& m:matches) pieces.push_back(Value::Str(m.str()));
+                                result={Value::ArrayValue(std::move(pieces)),{}};
+                            }
+                        } else if(member=="includes") {
                             result={Value::Bool(input.find(needle)!=std::string::npos),{}};
                         } else if(member=="startsWith") {
                             result={Value::Bool(input.starts_with(needle)),{}};
