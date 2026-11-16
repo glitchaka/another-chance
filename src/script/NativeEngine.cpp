@@ -142,6 +142,12 @@ class Interpreter {
         std::string path;
         Node* propertyNode=nullptr;
         std::shared_ptr<std::unordered_map<std::string,Value>> propertyObject;
+        Result() = default;
+        Result(Value initial,std::string target={},
+               Node* node=nullptr,
+               std::shared_ptr<std::unordered_map<std::string,Value>> object=nullptr)
+            :value(std::move(initial)),path(std::move(target)),propertyNode(node),
+             propertyObject(std::move(object)) {}
     };
     const Token& Peek() const {return tokens_[pos_];}
     bool Match(std::string_view text) {
