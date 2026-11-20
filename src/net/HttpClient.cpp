@@ -54,14 +54,17 @@ HttpClient::HttpClient() : state_(std::make_unique<State>()) {}
 HttpClient::~HttpClient() = default;
 void HttpClient::Cancel() noexcept {
     if (!state_) return;
-    std::lock_guard lock(state_->requestMutex);
-    state_->cancelled = true;
-    // WinHttpCloseHandle interrupts synchronous send/receive/read operations.
-    // The worker's request guard relinquishes ownership of the closed handle.
-    if (state_->activeRequest) {
-        WinHttpCloseHandle(state_->activeRequest);
+    HINTERNET pending = nullptr;
+    {
+        std::lock_guard lock(state_->requestMutex);
+        state_->cancelled = true;
+        pending = state_->activeRequest;
         state_->activeRequest = nullptr;
     }
+    // Never hold requestMutex while closing a WinHTTP handle. The worker
+    // must be free to finish the request guard even if closing waits for
+    // an in-flight operation or callback to unwind.
+    if (pending) WinHttpCloseHandle(pending);
 }
 
 
