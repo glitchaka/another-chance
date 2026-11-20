@@ -242,7 +242,8 @@ public:
     ~BrowserProcess() {
         if (window_ && IsWindow(window_)) PostMessageW(window_, WM_CLOSE, 0, 0);
         if (process_.hProcess) {
-            if (WaitForSingleObject(process_.hProcess, 16000) == WAIT_TIMEOUT) {
+            if (WaitForSingleObject(process_.hProcess, 4000) == WAIT_TIMEOUT) {
+                std::wcerr << L"FAIL: process did not exit within 4s of WM_CLOSE" << L"\n";
                 TerminateProcess(process_.hProcess, 2);
                 WaitForSingleObject(process_.hProcess, 3000);
             }
@@ -407,6 +408,10 @@ bool Until(Predicate condition, unsigned timeoutMs) {
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
+    std::wcout << std::unitbuf;
+    std::wcerr << std::unitbuf;
     if (argc != 2 && argc != 3) {
         std::cerr << "Usage: AnotherChanceSmoke.exe <browser.exe> [--live]\n";
         return 2;
@@ -524,6 +529,7 @@ int wmain(int argc, wchar_t** argv) {
         std::wstring page = L"http://127.0.0.1:" +
             std::to_wstring(server.Port()) + L"/start";
         {
+        std::cerr << "DIAG: start main local-browser test\n";
         BrowserProcess browser(argv[1], page);
         Check(browser.IsAlive(), "Browser process exited unexpectedly after startup");
         HICON extractedLarge = nullptr;
