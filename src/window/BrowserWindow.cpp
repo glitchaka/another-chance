@@ -474,7 +474,8 @@ void BrowserWindow::WorkerLoop() {
                         scriptBodies.emplace(url::ToUtf8(scriptUrl),jsResponse.body);
                     }
                 }
-                const auto scriptResult = script::ExecuteNative(result->document,response.url,scriptBodies);
+                const auto scriptResult = script::ExecuteNative(result->document,response.url,scriptBodies,
+                    &newestRequest_,job->generation);
                 result->scriptingReady = scriptResult.engineReady;
                 result->scriptError = scriptResult.lastError;
                 if (scriptResult.navigation != response.url)
