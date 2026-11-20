@@ -5,6 +5,7 @@
 #include "script/DomProperties.h"
 #include "util/Url.h"
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdint>
 #include <cmath>
@@ -176,6 +177,8 @@ class Interpreter {
     Document& doc_;
     std::wstring base_;
     Execution& stats_;
+    const std::atomic<unsigned>* generation_ = nullptr;
+    unsigned expectedGeneration_ = 0;
     std::unordered_map<std::string,Value> vars_;
     struct Function {
         std::vector<std::string> parameters;
@@ -232,7 +235,10 @@ class Interpreter {
         if(!Match(text)) throw std::runtime_error("Unexpected JavaScript token");
     }
     void Tick() {
-        if(++steps_>120000) throw std::runtime_error("Script execution budget exhausted");
+        if ((++steps_ & 63u) == 0 && generation_ &&
+            generation_->load() != expectedGeneration_)
+            throw std::runtime_error("Navigation cancelled");
+        if(steps_>120000) throw std::runtime_error("Script execution budget exhausted");
     }
     Value ReadProperty(const Value& base,const std::string& name) {
         if(base.kind==Value::Kind::Document) {
@@ -2130,8 +2136,10 @@ class Interpreter {
         (void)Match(";");
     }
 public:
-    Interpreter(Document& d,std::wstring_view base,Execution& stats):
-        doc_(d),base_(base),stats_(stats) {}
+    Interpreter(Document& d,std::wstring_view base,Execution& stats,
+                const std::atomic<unsigned>* generation, unsigned expected):
+        doc_(d),base_(base),stats_(stats),generation_(generation),
+        expectedGeneration_(expected) {}
     void FlushReadyCallbacks() {
         auto fire=[&](const std::string& name) {
             auto found=eventListeners_.find(name);
@@ -2218,14 +2226,19 @@ public:
 } // namespace
 
 Execution ExecuteNative(Document& document,std::wstring_view baseUrl,
-    const std::unordered_map<std::string,std::string>& external) {
+    const std::unordered_map<std::string,std::string>& external,
+    const std::atomic<unsigned>* navigationGeneration,
+    unsigned expectedGeneration) {
     Execution report;
     if(!document.root) return report;
     report.engineReady=true;
     std::vector<ScriptSource> scripts;
     CollectScripts(*document.root,baseUrl,external,scripts);
-    Interpreter interpreter(document,baseUrl,report);
+    Interpreter interpreter(document,baseUrl,report,
+                            navigationGeneration,expectedGeneration);
     for(const auto& script:scripts) {
+        if(navigationGeneration && navigationGeneration->load()!=expectedGeneration)
+            break;
         ++report.scripts;
         if(!interpreter.Run(script.source)) {
             ++report.unsupported;
@@ -2234,7 +2247,9 @@ Execution ExecuteNative(Document& document,std::wstring_view baseUrl,
         }
         if(!report.navigation.empty()) break;
     }
-    if(report.navigation.empty()) interpreter.FlushReadyCallbacks();
+    if(report.navigation.empty() && (!navigationGeneration ||
+       navigationGeneration->load()==expectedGeneration))
+        interpreter.FlushReadyCallbacks();
     return report;
 }
 } // namespace ac::script
