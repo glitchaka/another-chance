@@ -10,6 +10,7 @@
 #include "layout/Layout.h"
 #include "image/ImageStore.h"
 #include <windows.h>
+#include <atomic>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -867,7 +868,22 @@ void TestUrls() {
 }
 } // namespace
 
+void TestCancelledNavigation() {
+    auto document = ac::html::Parse(
+        "<html><body><div id='target'></div>"
+        "<script>document.getElementById('target').textContent='Executed';</script>"
+        "</body></html>");
+    std::atomic<unsigned> generation{2};
+    const auto result = ac::script::ExecuteNative(
+        document, L"https://example.org/", {}, &generation, 1);
+    Check(result.scripts == 0,
+          "cancelled navigation must not execute stale JavaScript");
+    const auto* target = Find(*document.root, "div");
+    Check(target && target->children.empty(),
+          "cancelled JavaScript must not change the DOM");
+}
 int main() {
+    TestCancelledNavigation();
     try {
         TestHtml();
         TestStyles();
