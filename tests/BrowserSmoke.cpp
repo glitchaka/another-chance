@@ -547,8 +547,12 @@ int wmain(int argc, wchar_t** argv) {
               "Executable does not contain a real Windows icon resource");
         if (extractedLarge) DestroyIcon(extractedLarge);
         if (extractedSmall) DestroyIcon(extractedSmall);
-        HICON windowIcon = reinterpret_cast<HICON>(
-            SendMessageW(browser.Window(), WM_GETICON, ICON_SMALL, 0));
+        DWORD_PTR iconResult = 0;
+        const LRESULT iconReply = SendMessageTimeoutW(
+            browser.Window(), WM_GETICON, ICON_SMALL, 0,
+            SMTO_ABORTIFHUNG | SMTO_BLOCK, 2000, &iconResult);
+        Check(iconReply != 0, "UI thread is unresponsive during WM_GETICON");
+        HICON windowIcon = reinterpret_cast<HICON>(iconResult);
         if (!windowIcon) {
             windowIcon = reinterpret_cast<HICON>(
                 GetClassLongPtrW(browser.Window(), GCLP_HICONSM));
